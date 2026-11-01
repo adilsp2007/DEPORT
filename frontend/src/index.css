@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --color-lux-bg: #0B0F0D;
+  --color-lux-dark: #070A08;
+  --color-lux-accent: #10B981;
+  --color-lux-gold: #10B981;
+  --color-lux-gray: #9CA3AF;
+  --color-lux-white: #161C18;
+  --color-lux-card: #131915;
+}
+
+@layer base {
+  body {
+    background-color: #0B0F0D;
+    color: #F3F4F6;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, .font-serif {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+}
+
+/* Custom Utilities & Animations */
+.glass-panel {
+  background: rgba(19, 25, 21, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.gold-gradient-text, .green-gradient-text {
+  background: linear-gradient(135deg, #10B981 0%, #34D399 50%, #059669 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Smooth custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0F0D;
+}
+::-webkit-scrollbar-thumb {
+  background: #1A241F;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #10B981;
+}
+
+/* Prevent Browser Autofill from overriding dark luxury theme styling */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #161D19 inset !important;
+  -webkit-text-fill-color: #F3F4F6 !important;
+  caret-color: #10B981 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
