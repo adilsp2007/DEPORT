@@ -18,8 +18,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-deport-bag-store-key-devel
 
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = ['*']
-
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
 
@@ -153,7 +152,7 @@ RAZORPAY_CURRENCY = os.getenv('RAZORPAY_CURRENCY', 'INR').strip()
 # CORS Settings
 frontend_origins = os.getenv('FRONTEND_URL', 'http://localhost:5173,http://localhost:5174').split(',')
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in frontend_origins if origin.strip()]
-CORS_ALLOW_ALL_ORIGINS = True  # For dev convenience
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL', 'False').lower() == 'true'  # For dev convenience
 
 # Cache Configuration (Fast In-Memory Cache for instant response)
 CACHES = {
@@ -193,3 +192,12 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '').strip()
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '').strip()
 GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5173/auth/google/callback').strip()
 
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]
+
+USE_HTTPS = os.getenv('USE_HTTPS', 'False').lower() == 'true'
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = USE_HTTPS
+    SESSION_COOKIE_SECURE = USE_HTTPS
+    CSRF_COOKIE_SECURE = USE_HTTPS
