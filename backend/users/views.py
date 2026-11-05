@@ -46,32 +46,40 @@ def get_tokens_for_user(user):
     }
 
 
+def is_test_environment():
+    import sys
+    return bool(getattr(settings, 'TESTING', False) or ('test' in sys.argv))
+
+
 def send_deport_otp_email(email, code, first_name='', subject="DEPORT - Verification Code"):
     """
-    Sends an authentic luxury-styled OTP email via the configured Django email backend.
-    Gracefully handles real SMTP if credentials are provided in .env, and logs safe
-    server-side diagnostics without leaking OTP codes or passwords.
+    Sends an authentic luxury-styled OTP email via the configured Django email backend or AWS SES.
+    Supports:
+    1. Direct AWS SES API (via boto3 HTTPS port 443) when USE_AWS_SES=True or SES credentials provided.
+       This bypasses EC2 port 25/587 blocking and Google cloud IP restrictions.
+    2. Standard Django SMTP backend with granular error handling:
+       - SMTPAuthenticationError
+       - socket.timeout / TimeoutError
+       - SMTPConnectError / ConnectionRefusedError
+       - SMTPSenderRefused
+       - SMTPRecipientsRefused
+       - ssl.SSLError
+    Never exposes raw OTP or email passwords in logs.
+    Returns (success: bool, message: str)
     """
     import logging
+    import smtplib
+    import socket
+    import ssl
     from django.core.mail import send_mail
     from django.conf import settings
 
     logger = logging.getLogger('django')
     logger.info(f"Attempting to dispatch verification OTP email to recipient: {email} (subject: {subject})")
 
-    backend_str = getattr(settings, 'EMAIL_BACKEND', '')
-    is_smtp = 'smtp' in backend_str.lower()
-    host_user = getattr(settings, 'EMAIL_HOST_USER', '').strip()
-    host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '').strip()
-
-    if is_smtp and (not host_user or not host_pass):
-        logger.error(
-            "SMTP email backend is configured, but EMAIL_HOST_USER or EMAIL_HOST_PASSWORD is missing in backend/.env. "
-            "Cannot authenticate with SMTP host. Either configure credentials or set EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend in .env for development."
-        )
-        return False, "SMTP credentials missing in environment."
-
     expiry_minutes = getattr(settings, 'OTP_EXPIRY_MINUTES', 5)
+    host_user = getattr(settings, 'EMAIL_HOST_USER', '').strip()
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or f"DEPORT Atelier <{host_user or 'noreply@deport.com'}>"
 
     plain_message = (
         f"Hello {first_name or 'there'},\n\n"
@@ -124,7 +132,54 @@ def send_deport_otp_email(email, code, first_name='', subject="DEPORT - Verifica
 </body>
 </html>
 """
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None) or f"DEPORT Atelier <{host_user or 'noreply@deport.com'}>"
+    # 1. AWS SES Direct API Dispatcher (HTTPS Port 443)
+    if getattr(settings, 'USE_AWS_SES', False):
+        try:
+            import boto3
+            ses_kwargs = {
+                'region_name': getattr(settings, 'AWS_SES_REGION_NAME', 'us-east-1')
+            }
+            key_id = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
+            secret_key = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
+            if key_id and secret_key:
+                ses_kwargs['aws_access_key_id'] = key_id
+                ses_kwargs['aws_secret_access_key'] = secret_key
+
+            ses_client = boto3.client('ses', **ses_kwargs)
+            ses_params = {
+                'Source': from_email,
+                'Destination': {'ToAddresses': [email]},
+                'Message': {
+                    'Subject': {'Data': subject, 'Charset': 'UTF-8'},
+                    'Body': {
+                        'Text': {'Data': plain_message, 'Charset': 'UTF-8'},
+                        'Html': {'Data': html_message, 'Charset': 'UTF-8'}
+                    }
+                }
+            }
+            config_set = getattr(settings, 'AWS_SES_CONFIGURATION_SET', None)
+            if config_set:
+                ses_params['ConfigurationSetName'] = config_set
+
+            ses_resp = ses_client.send_email(**ses_params)
+            logger.info(f"Successfully sent OTP email via AWS SES to {email} (MessageId: {ses_resp.get('MessageId')})")
+            return True, "Email sent successfully via AWS SES."
+        except Exception as e:
+            logger.error(f"AWS SES delivery error for {email}: {type(e).__name__} - {e}")
+            error_code = getattr(e, 'response', {}).get('Error', {}).get('Code', type(e).__name__)
+            return False, f"AWS SES email delivery error: {error_code}"
+
+    # 2. Standard SMTP Dispatcher with Granular Error Handling
+    backend_str = getattr(settings, 'EMAIL_BACKEND', '')
+    is_smtp = 'smtp' in backend_str.lower()
+    host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '').strip()
+
+    if is_smtp and (not host_user or not host_pass):
+        logger.error(
+            "SMTP email backend is configured, but EMAIL_HOST_USER or EMAIL_HOST_PASSWORD is missing in backend/.env. "
+            "Cannot authenticate with SMTP host."
+        )
+        return False, "SMTP credentials missing in environment."
 
     try:
         sent_count = send_mail(
@@ -141,6 +196,24 @@ def send_deport_otp_email(email, code, first_name='', subject="DEPORT - Verifica
         else:
             logger.warning(f"send_mail returned 0 messages sent for recipient {email}")
             return False, "Email provider accepted request but delivered 0 messages."
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error(f"SMTP authentication failure sending to {email}: {e}")
+        return False, "SMTP authentication failed. Verify EMAIL_HOST_USER and EMAIL_HOST_PASSWORD."
+    except (socket.timeout, TimeoutError) as e:
+        logger.error(f"SMTP connection timeout sending to {email}: {e}")
+        return False, "SMTP connection timed out. Check network connectivity or firewall ports."
+    except (smtplib.SMTPConnectError, ConnectionRefusedError) as e:
+        logger.error(f"SMTP connection error sending to {email}: {e}")
+        return False, "Could not connect to SMTP server. Verify host and port."
+    except smtplib.SMTPSenderRefused as e:
+        logger.error(f"SMTP sender refused sending to {email}: {e}")
+        return False, "Sender email address was rejected by SMTP server."
+    except smtplib.SMTPRecipientsRefused as e:
+        logger.error(f"SMTP recipient refused for {email}: {e}")
+        return False, "Recipient email address was rejected by SMTP server."
+    except ssl.SSLError as e:
+        logger.error(f"SSL/TLS handshake failure sending to {email}: {e}")
+        return False, "SSL/TLS secure handshake failed with email server."
     except Exception as e:
         logger.error(f"Failed to deliver OTP email to {email}: {type(e).__name__} - {e}")
         return False, f"Email delivery error: {type(e).__name__}"
@@ -150,7 +223,6 @@ class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        import sys
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
@@ -164,15 +236,18 @@ class RegisterView(APIView):
                 subject="DEPORT - Your Verification Code"
             )
 
-            is_dev_or_test = settings.DEBUG or getattr(settings, 'TESTING', False) or ('test' in sys.argv)
+            is_test = is_test_environment()
 
             if not email_sent:
+                # Reset otp_created_at so the cooldown does not lock the user out from immediate retry
+                user.otp_created_at = None
+                user.save(update_fields=['otp_created_at'])
                 return Response({
                     'user': user_data,
                     'email': user.email,
                     'email_sent': False,
-                    'detail': 'Registration succeeded, but the verification code email could not be delivered. Please check email configuration or try resending.',
-                    'otp_code': code if is_dev_or_test else None
+                    'detail': f'Registration succeeded, but the verification code email could not be delivered: {email_msg}. Please click Resend Code to try again.',
+                    'otp_code': code if is_test else None
                 }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
             msg = 'Registration successful. Verification OTP sent to your email.'
@@ -181,8 +256,23 @@ class RegisterView(APIView):
                 'email': user.email,
                 'email_sent': True,
                 'message': msg,
-                'otp_code': code if is_dev_or_test else None
+                'otp_code': code if is_test else None
             }, status=status.HTTP_201_CREATED)
+
+        first_error = None
+        for field, errors in serializer.errors.items():
+            if isinstance(errors, list) and errors:
+                first_error = errors[0]
+                break
+            elif isinstance(errors, str):
+                first_error = errors
+                break
+
+        err_data = dict(serializer.errors)
+        if first_error and 'detail' not in err_data:
+            err_data['detail'] = first_error
+
+        return Response(err_data, status=status.HTTP_400_BAD_REQUEST)
 
         first_error = None
         for field, errors in serializer.errors.items():
@@ -306,7 +396,7 @@ class ResendOTPView(APIView):
             if user.is_email_verified:
                 return Response({'detail': 'This account has already been verified. Please log in.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            cooldown_seconds = getattr(settings, 'OTP_RESEND_COOLDOWN_SECONDS', 30)
+            cooldown_seconds = getattr(settings, 'OTP_RESEND_COOLDOWN_SECONDS', 60)
             if user.otp_created_at:
                 now = timezone.now()
                 seconds_since = (now - user.otp_created_at).total_seconds()
@@ -326,13 +416,16 @@ class ResendOTPView(APIView):
                 subject="DEPORT - New Verification Code"
             )
 
-            is_dev_or_test = settings.DEBUG or getattr(settings, 'TESTING', False) or ('test' in sys.argv)
+            is_test = is_test_environment()
 
             if not email_sent:
+                # Reset otp_created_at so cooldown does not penalize user for email delivery error
+                user.otp_created_at = None
+                user.save(update_fields=['otp_created_at'])
                 return Response({
-                    'detail': 'Failed to deliver verification code email. Please check your email configuration or try again later.',
+                    'detail': f'Failed to deliver verification code email: {email_msg}. Please check your email configuration or try again.',
                     'email_sent': False,
-                    'otp_code': code if is_dev_or_test else None
+                    'otp_code': code if is_test else None
                 }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
             msg = 'A new verification code has been sent.'
@@ -340,7 +433,7 @@ class ResendOTPView(APIView):
                 'message': msg,
                 'email_sent': True,
                 'cooldown': cooldown_seconds,
-                'otp_code': code if is_dev_or_test else None
+                'otp_code': code if is_test else None
             }, status=status.HTTP_200_OK)
 
 
@@ -421,7 +514,7 @@ class LoginView(APIView):
             return Response({
                 'requires_two_step': True,
                 'email': user.email,
-                'otp_code': code if settings.DEBUG else None,
+                'otp_code': code if is_test_environment() else None,
                 'message': 'Two-step verification code sent to your email.'
             }, status=status.HTTP_200_OK)
 
@@ -890,7 +983,7 @@ class GoogleAuthView(APIView):
             return Response({
                 'requires_two_step': True,
                 'email': user.email,
-                'otp_code': otp_code if settings.DEBUG else None,
+                'otp_code': otp_code if is_test_environment() else None,
                 'message': 'Two-step verification code sent to your email.'
             }, status=status.HTTP_200_OK)
 

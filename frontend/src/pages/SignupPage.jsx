@@ -247,11 +247,10 @@ export const SignupPage = () => {
       // Clean OTP state for user entry (no auto-fill)
       setOtp(['', '', '', '', '', '']);
       setOtpError('');
-      const successMsg = regData?.otp_code
-        ? `Verification code: ${regData.otp_code} (check console or email)`
-        : (regData?.message || 'Verification code sent to your email. Please check your inbox.');
+      const successMsg = regData?.message || 'Verification code sent to your email. Please check your inbox.';
       setOtpSuccess(successMsg);
       showToast('Registration submitted! Please verify with your 6-digit code.', 'info');
+      setCooldown(60);
 
       // Switch to inline OTP step right on this page!
       setCurrentStep('verify');
@@ -273,11 +272,10 @@ export const SignupPage = () => {
         if (err.response.status === 503 && (data.email || data.user?.email)) {
           localStorage.setItem('pending_verify_email', trimmedEmail);
           setOtp(['', '', '', '', '', '']);
-          if (data.otp_code) {
-            setOtpSuccess(`Verification code: ${data.otp_code} (check console or email)`);
-          }
-          setOtpError(data.detail || 'Email delivery failed. You can enter your verification code or click Resend Code.');
-          showToast('Account registered! Please enter the 6-digit verification code.', 'info');
+          setOtpSuccess('');
+          setOtpError(data.detail || 'Verification email could not be delivered. Please click Resend Code to try again.');
+          showToast('Account registered, but verification email could not be delivered. Please click Resend Code.', 'warning');
+          setCooldown(0); // Allow immediate resend retry
           setCurrentStep('verify');
           return;
         }
@@ -473,9 +471,7 @@ export const SignupPage = () => {
     try {
       const res = await resendOTP(targetEmail);
       setOtp(['', '', '', '', '', '']);
-      const msg = res?.otp_code
-        ? `New verification code: ${res.otp_code} (check console or email)`
-        : (res?.message || 'A fresh verification code has been sent to your email.');
+      const msg = res?.message || 'A fresh verification code has been sent to your email.';
       setOtpSuccess(msg);
       showToast(msg, 'info');
       setCooldown(res?.cooldown || 60);
@@ -484,6 +480,8 @@ export const SignupPage = () => {
       const detail = err.response?.data?.detail;
       if (err.response?.status === 429 && err.response?.data?.remaining_seconds) {
         setCooldown(err.response.data.remaining_seconds);
+      } else if (err.response?.status === 503) {
+        setCooldown(0);
       }
       setOtpError(detail || 'Failed to resend code. Please try again.');
     } finally {
@@ -1121,10 +1119,10 @@ export const SignupPage = () => {
                 <Button
                   variant="primary"
                   fullWidth
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/login', { state: { registeredEmail: formData.email.trim(), message: 'Email verified successfully! Please sign in.' } })}
                   className="uppercase font-bold tracking-wider text-xs py-3.5"
                 >
-                  Start Exploring Now <ArrowRight size={14} className="ml-1" />
+                  Proceed to Sign In <ArrowRight size={14} className="ml-1" />
                 </Button>
               </div>
             </div>

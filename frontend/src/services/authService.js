@@ -36,9 +36,8 @@ export const authService = {
       code: cleanCode,
       otp: cleanCode
     });
-    if (response.data.access) {
-      setTokens(response.data.access, response.data.refresh);
-    }
+    // Verified successfully. Session tokens are not saved here so that the user logs in
+    // explicitly on the login page (Step 14: Redirect to login -> Step 15: User logs in successfully).
     return response.data;
   },
 

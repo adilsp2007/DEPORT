@@ -116,9 +116,6 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const data = await authService.verifyEmail(email, code);
-      if (data.user) {
-        setUser(data.user);
-      }
       setIsLoading(false);
       return data;
     } catch (error) {

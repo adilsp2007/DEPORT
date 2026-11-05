@@ -119,9 +119,8 @@ class User(AbstractBaseUser, PermissionsMixin):
             return False, "Too many failed attempts. This verification code has been invalidated. Please request a new code.", "TOO_MANY_ATTEMPTS"
 
         expiry_minutes = getattr(settings, 'OTP_EXPIRY_MINUTES', 5)
-        if self.otp_created_at:
-            if (timezone.now() - self.otp_created_at) > timedelta(minutes=expiry_minutes):
-                return False, "This verification code has expired. Please request a new code.", "EXPIRED"
+        if not self.otp_created_at or (timezone.now() - self.otp_created_at) > timedelta(minutes=expiry_minutes):
+            return False, "This verification code has expired. Please request a new code.", "EXPIRED"
 
         is_match = False
         try:

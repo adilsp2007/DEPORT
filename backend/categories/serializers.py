@@ -4,6 +4,7 @@ from .models import Category
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    
     slug = serializers.SlugField(required=False, allow_blank=True)
     product_count = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
@@ -37,7 +38,6 @@ class CategorySerializer(serializers.ModelSerializer):
             return obj.image.url
         return obj.image_url or None
 
-
 class CategoryDetailSerializer(serializers.ModelSerializer):
     slug = serializers.SlugField(required=False, allow_blank=True)
     product_count = serializers.SerializerMethodField()
@@ -45,7 +45,7 @@ class CategoryDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ('id', 'name', 'slug', 'description', 'image', 'image_url', 'is_active', 'is_deleted', 'product_count', 'created_at', 'updated_at')
+        fields = ('id', 'name', 'slug','description','image','image_url', 'is_active', 'is_deleted', 'product_count', 'created_at', 'updated_at')
 
     def validate_name(self, value):
         cleaned_name = re.sub(r'\s+', ' ', value).strip()

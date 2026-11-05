@@ -18,7 +18,10 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-deport-bag-store-key-devel
 
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,3.26.239.29').split(',') if h.strip()]
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
 
@@ -121,17 +124,43 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Email Configuration
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com').strip()
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
-EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
+
+# TLS vs SSL Mutual Exclusivity Protection (Port 465 enforces SSL; Port 587 enforces TLS)
+env_ssl = os.getenv('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
+env_tls = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+
+if env_ssl or EMAIL_PORT == 465:
+    EMAIL_USE_SSL = True
+    EMAIL_USE_TLS = False
+else:
+    EMAIL_USE_SSL = False
+    EMAIL_USE_TLS = env_tls
+
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'amhd7858@gmail.com').strip()
-email_host_pass = os.getenv('EMAIL_HOST_PASSWORD', '').strip().strip('"\'')
-if 'gmail.com' in os.getenv('EMAIL_HOST', 'smtp.gmail.com').lower():
-    email_host_pass = email_host_pass.replace(' ', '')
-EMAIL_HOST_PASSWORD = email_host_pass
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'DEPORT Atelier <{EMAIL_HOST_USER or "amhd7858@gmail.com"}>').strip('"\'')
-EMAIL_TIMEOUT = 10
+raw_host_pass = os.getenv('EMAIL_HOST_PASSWORD', '').strip()
+if (raw_host_pass.startswith('"') and raw_host_pass.endswith('"')) or (raw_host_pass.startswith("'") and raw_host_pass.endswith("'")):
+    raw_host_pass = raw_host_pass[1:-1]
+if 'gmail.com' in EMAIL_HOST.lower():
+    raw_host_pass = raw_host_pass.replace(' ', '')
+EMAIL_HOST_PASSWORD = raw_host_pass
+
+raw_from_email = os.getenv('DEFAULT_FROM_EMAIL', '').strip()
+if (raw_from_email.startswith('"') and raw_from_email.endswith('"')) or (raw_from_email.startswith("'") and raw_from_email.endswith("'")):
+    raw_from_email = raw_from_email[1:-1]
+if not raw_from_email:
+    raw_from_email = f"DEPORT Atelier <{EMAIL_HOST_USER or 'amhd7858@gmail.com'}>"
+DEFAULT_FROM_EMAIL = raw_from_email
+
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 15))
+
+# AWS SES Configuration (Direct API via boto3 or SES SMTP)
+USE_AWS_SES = os.getenv('USE_AWS_SES', 'False').lower() in ('true', '1', 'yes')
+AWS_SES_REGION_NAME = os.getenv('AWS_SES_REGION_NAME', os.getenv('AWS_DEFAULT_REGION', 'us-east-1')).strip()
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', '').strip()
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', '').strip()
+AWS_SES_CONFIGURATION_SET = os.getenv('AWS_SES_CONFIGURATION_SET', '').strip()
 
 # OTP Configuration
 OTP_EXPIRY_MINUTES = int(os.getenv('OTP_EXPIRY_MINUTES', 5))
@@ -150,9 +179,9 @@ RAZORPAY_WEBHOOK_SECRET = os.getenv('RAZORPAY_WEBHOOK_SECRET', '').strip()
 RAZORPAY_CURRENCY = os.getenv('RAZORPAY_CURRENCY', 'INR').strip()
 
 # CORS Settings
-frontend_origins = os.getenv('FRONTEND_URL', 'http://localhost:5173,http://localhost:5174').split(',')
+frontend_origins = os.getenv('FRONTEND_URL', 'http://localhost:5173,http://localhost:5174,http://3.26.239.29,http://localhost:3000').split(',')
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in frontend_origins if origin.strip()]
-CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL', 'False').lower() == 'true'  # For dev convenience
+CORS_ALLOW_ALL_ORIGINS = DEBUG or (os.getenv('CORS_ALLOW_ALL', 'False').lower() == 'true')
 
 # Cache Configuration (Fast In-Memory Cache for instant response)
 CACHES = {

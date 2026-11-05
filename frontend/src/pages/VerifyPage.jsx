@@ -51,8 +51,6 @@ export const VerifyPage = () => {
       setAccountStatus(res);
       if (res.is_verified) {
         setErrorMessage('');
-      } else if (res?.otp_code) {
-        setSuccessMessage(`Verification code: ${res.otp_code} (check console or email)`);
       }
     } catch (err) {
       if (err.response?.status === 404) {
@@ -239,9 +237,7 @@ export const VerifyPage = () => {
       const res = await resendOTP(targetEmail);
       localStorage.setItem('pending_verify_email', targetEmail);
       setOtp(['', '', '', '', '', '']);
-      const msg = res?.otp_code
-        ? `New verification code: ${res.otp_code} (check console or email)`
-        : (res?.message || 'A new verification code has been sent to your email.');
+      const msg = res?.message || 'A new verification code has been sent to your email.';
       setSuccessMessage(msg);
       showToast(msg, 'info');
       setCooldown(res?.cooldown || 60);
@@ -251,6 +247,8 @@ export const VerifyPage = () => {
         const detail = err.response.data.detail;
         if (err.response.status === 429 && err.response.data.remaining_seconds) {
           setCooldown(err.response.data.remaining_seconds);
+        } else if (err.response.status === 503) {
+          setCooldown(0);
         }
         setErrorMessage(detail || 'Failed to resend verification code. Please try again.');
       } else {
