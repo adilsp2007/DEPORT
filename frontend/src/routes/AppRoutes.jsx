@@ -25,6 +25,7 @@ import AdminUsersPage from '../pages/admin/AdminUsersPage';
 import AdminProductsPage from '../pages/admin/AdminProductsPage';
 import AdminInventoryPage from '../pages/admin/AdminInventoryPage';
 import AdminCategoriesPage from '../pages/admin/AdminCategoriesPage';
+import AdminCategoryOffersPage from '../pages/admin/AdminCategoryOffersPage';
 import AdminOrdersPage from '../pages/admin/AdminOrdersPage';
 import AdminCouponsPage from '../pages/admin/AdminCouponsPage';
 import AdminBannersPage from '../pages/admin/AdminBannersPage';
@@ -47,6 +48,7 @@ export const AppRoutes = () => {
           <Route path="/admin/products" element={<AdminProductsPage />} />
           <Route path="/admin/inventory" element={<AdminInventoryPage />} />
           <Route path="/admin/categories" element={<AdminCategoriesPage />} />
+          <Route path="/admin/category-offers" element={<AdminCategoryOffersPage />} />
           <Route path="/admin/orders" element={<AdminOrdersPage />} />
           <Route path="/admin/coupons" element={<AdminCouponsPage />} />
           <Route path="/admin/banners" element={<AdminBannersPage />} />

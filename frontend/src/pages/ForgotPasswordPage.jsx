@@ -4,6 +4,7 @@ import authService from '../services/authService';
 import { useShop } from '../context/ShopContext';
 import Input from '../components/Input';
 import Button from '../components/Button';
+import { parseApiError } from '../utils/errorHandler';
 import {
   KeyRound,
   Mail,
@@ -73,7 +74,8 @@ export const ForgotPasswordPage = () => {
       setCountdown(60);
       setCanResend(false);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to request password reset code.');
+      const parsed = parseApiError(err, 'Failed to request password reset code. Please try again.');
+      setError(parsed.message);
     } finally {
       setLoading(false);
     }
@@ -93,7 +95,8 @@ export const ForgotPasswordPage = () => {
       setCountdown(60);
       setCanResend(false);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to resend code.');
+      const parsed = parseApiError(err, 'Failed to resend code. Please try again.');
+      setError(parsed.message);
     } finally {
       setLoading(false);
     }
@@ -131,14 +134,8 @@ export const ForgotPasswordPage = () => {
       showToast('Password reset successful! Please log in with your new password.');
       navigate('/login');
     } catch (err) {
-      const resp = err.response?.data;
-      if (resp?.detail) {
-        setError(resp.detail);
-      } else if (resp?.new_password) {
-        setError(Array.isArray(resp.new_password) ? resp.new_password[0] : resp.new_password);
-      } else {
-        setError('Failed to reset password. Please check your code and try again.');
-      }
+      const parsed = parseApiError(err, 'Failed to reset password. Please check your code and try again.');
+      setError(parsed.message);
     } finally {
       setLoading(false);
     }
@@ -186,7 +183,10 @@ export const ForgotPasswordPage = () => {
               type="email"
               placeholder="e.g. client@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(null);
+              }}
               icon={Mail}
               required
             />
@@ -279,7 +279,7 @@ export const ForgotPasswordPage = () => {
                 className={`font-semibold transition-colors ${
                   canResend
                     ? 'text-[#10B981] hover:underline cursor-pointer'
-                    : 'text-gray-600 cursor-not-allowed'
+                    : 'text-gray-400 opacity-60 cursor-not-allowed'
                 }`}
               >
                 {canResend ? 'Resend Code' : `Resend in ${countdown}s`}

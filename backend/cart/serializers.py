@@ -2,6 +2,7 @@ from decimal import Decimal
 from rest_framework import serializers
 from .models import Cart, CartItem
 from products.serializers import ProductListSerializer
+from categories.offer_service import get_effective_product_price
 
 MAX_ITEM_QUANTITY = 10
 
@@ -22,8 +23,8 @@ class CartItemSerializer(serializers.ModelSerializer):
         )
 
     def get_item_total(self, obj):
-        dec_price = Decimal(str(obj.product.price))
-        return float((dec_price * Decimal(str(obj.quantity))).quantize(Decimal('0.01')))
+        eff = get_effective_product_price(obj.product)
+        return float((eff['selling_price'] * Decimal(str(obj.quantity))).quantize(Decimal('0.01')))
 
     def get_is_in_stock(self, obj):
         p = obj.product
@@ -57,10 +58,10 @@ class CartSerializer(serializers.ModelSerializer):
         )
 
     def get_subtotal(self, obj):
-        items = list(obj.items.select_related('product'))
+        items = list(obj.items.select_related('product', 'product__category'))
         if not items:
             return 0.00
-        total = sum(Decimal(str(i.product.price)) * Decimal(str(i.quantity)) for i in items)
+        total = sum(get_effective_product_price(i.product)['selling_price'] * Decimal(str(i.quantity)) for i in items)
         return float(total.quantize(Decimal('0.01')))
 
     def get_total_items(self, obj):

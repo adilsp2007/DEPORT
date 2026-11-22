@@ -11,6 +11,32 @@ export const adminService = {
   },
 
   /**
+   * Fetch Advanced Admin Dashboard Analytics
+   * Supports period, custom date range, grouping, product sorting, order search & status filters
+   */
+  async getDashboardAnalytics({
+    period = 'this_month',
+    startDate = '',
+    endDate = '',
+    grouping = '',
+    topProductsSort = 'units_sold_desc',
+    orderSearch = '',
+    orderStatus = ''
+  } = {}) {
+    const params = new URLSearchParams();
+    if (period) params.append('period', period);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (grouping) params.append('grouping', grouping);
+    if (topProductsSort) params.append('top_products_sort', topProductsSort);
+    if (orderSearch) params.append('order_search', orderSearch);
+    if (orderStatus) params.append('order_status', orderStatus);
+
+    const response = await api.get(`/admin/dashboard/analytics/?${params.toString()}`);
+    return response.data;
+  },
+
+  /**
    * Fetch Paginated User List with search and status filter
    */
   async getUsers({ page = 1, pageSize = 10, search = '', status = '' } = {}) {
@@ -98,6 +124,48 @@ export const adminService = {
 
   async toggleCategoryStatus(id) {
     const response = await api.post(`/admin/categories/${id}/toggle-status/`);
+    return response.data;
+  },
+
+  /* ==========================================================================
+     CATEGORY OFFER MANAGEMENT APIS
+     ========================================================================== */
+
+  async getCategoryOffers({ page = 1, pageSize = 10, search = '', status = '', category = '', sort = '' } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page);
+    if (pageSize) params.append('page_size', pageSize);
+    if (search) params.append('search', search);
+    if (status) params.append('status', status);
+    if (category) params.append('category', category);
+    if (sort) params.append('sort', sort);
+
+    const response = await api.get(`/admin/category-offers/?${params.toString()}`);
+    return response.data;
+  },
+
+  async getCategoryOfferDetail(id) {
+    const response = await api.get(`/admin/category-offers/${id}/`);
+    return response.data;
+  },
+
+  async createCategoryOffer(data) {
+    const response = await api.post('/admin/category-offers/', data);
+    return response.data;
+  },
+
+  async updateCategoryOffer(id, data) {
+    const response = await api.patch(`/admin/category-offers/${id}/`, data);
+    return response.data;
+  },
+
+  async deleteCategoryOffer(id) {
+    const response = await api.delete(`/admin/category-offers/${id}/`);
+    return response.data;
+  },
+
+  async toggleCategoryOfferStatus(id) {
+    const response = await api.post(`/admin/category-offers/${id}/toggle-status/`);
     return response.data;
   },
 
@@ -292,11 +360,33 @@ export const adminService = {
      BANNER MANAGEMENT APIS
      ========================================================================== */
 
-  async getBanners({ page = 1, search = '', placement = '' } = {}) {
+  async getBanners({
+    page = 1,
+    pageSize = 10,
+    search = '',
+    bannerType = '',
+    placement = '',
+    status = '',
+    startDate = '',
+    endDate = '',
+    ordering = ''
+  } = {}) {
     const params = new URLSearchParams();
     if (page) params.append('page', page);
+    if (pageSize) params.append('page_size', pageSize);
     if (search) params.append('search', search);
-    if (placement) params.append('placement', placement);
+
+    const typeVal = bannerType || placement;
+    if (typeVal && typeVal.toLowerCase() !== 'all') {
+      params.append('banner_type', typeVal);
+    }
+
+    if (status && status.toLowerCase() !== 'all') {
+      params.append('status', status);
+    }
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (ordering) params.append('ordering', ordering);
 
     const response = await api.get(`/admin/banners/?${params.toString()}`);
     return response.data;
@@ -307,13 +397,34 @@ export const adminService = {
     return response.data;
   },
 
+  async getBannerTypes() {
+    const response = await api.get('/admin/banners/types/');
+    return response.data;
+  },
+
+  async getBannerSummary() {
+    const response = await api.get('/admin/banners/summary/');
+    return response.data;
+  },
+
+  async toggleBannerStatus(id) {
+    const response = await api.post(`/admin/banners/${id}/toggle-status/`);
+    return response.data;
+  },
+
   async createBanner(data) {
-    const response = await api.post('/admin/banners/', data);
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    const response = await api.post('/admin/banners/', data, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {}
+    });
     return response.data;
   },
 
   async updateBanner(id, data) {
-    const response = await api.patch(`/admin/banners/${id}/`, data);
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    const response = await api.patch(`/admin/banners/${id}/`, data, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {}
+    });
     return response.data;
   },
 

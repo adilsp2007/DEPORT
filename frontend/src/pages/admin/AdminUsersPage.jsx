@@ -4,6 +4,8 @@ import adminService from '../../services/adminService';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import AdminPagination from '../../components/admin/AdminPagination';
+import ErrorState from '../../components/ErrorState';
+import { parseApiError } from '../../utils/errorHandler';
 import {
   Users,
   Search,
@@ -83,11 +85,8 @@ export const AdminUsersPage = () => {
       setTotalUsers(data.count || 0);
       setTotalPages(data.total_pages || Math.ceil((data.count || 0) / pageSize) || 1);
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.detail) {
-        setError(err.response.data.detail);
-      } else {
-        setError('Failed to load user records. Please try again.');
-      }
+      const parsed = parseApiError(err, 'Failed to load user records. Please try again.');
+      setError(parsed.message);
     } finally {
       setLoading(false);
     }
@@ -123,11 +122,8 @@ export const AdminUsersPage = () => {
 
       fetchUsers();
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.detail) {
-        setActionError(err.response.data.detail);
-      } else {
-        setActionError('Failed to update account status.');
-      }
+      const parsed = parseApiError(err, 'Failed to update account status.');
+      setActionError(parsed.message);
     } finally {
       setActionLoading(false);
     }
@@ -154,11 +150,8 @@ export const AdminUsersPage = () => {
       setUserToDelete(null);
       fetchUsers();
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.detail) {
-        setActionError(err.response.data.detail);
-      } else {
-        setActionError('Failed to delete user account.');
-      }
+      const parsed = parseApiError(err, 'Failed to delete user account.');
+      setActionError(parsed.message);
     } finally {
       setDeleteLoading(false);
     }
@@ -221,7 +214,7 @@ export const AdminUsersPage = () => {
             User Accounts ({totalUsers})
           </h2>
           <p className="text-xs text-gray-400 mt-1 font-light">
-            Search, inspect user profiles, and manage account access permissions.
+            Verified customer accounts. Only users with completed email verification appear here by default.
           </p>
         </div>
 
@@ -299,9 +292,11 @@ export const AdminUsersPage = () => {
             }}
             className="bg-[#161D19] text-[#F3F4F6] text-xs px-4 py-3 border border-[#1E2922] focus:border-[#10B981] focus:outline-none cursor-pointer"
           >
-            <option value="">All Statuses</option>
-            <option value="active">Active Only</option>
-            <option value="blocked">Blocked Only</option>
+            <option value="">Verified Users (Default)</option>
+            <option value="active">Active Verified Accounts</option>
+            <option value="blocked">Blocked Verified Accounts</option>
+            <option value="unverified">Pending Unverified Signups</option>
+            <option value="all">All Accounts (Including Pending)</option>
           </select>
         </div>
       </div>
@@ -315,7 +310,8 @@ export const AdminUsersPage = () => {
                 <th className="py-4 px-6">ID</th>
                 <th className="py-4 px-6">User Details</th>
                 <th className="py-4 px-6">Role / Auth</th>
-                <th className="py-4 px-6">Status</th>
+                <th className="py-4 px-6">Account Status</th>
+                <th className="py-4 px-6">Email Verification</th>
                 <th className="py-4 px-6">Registered Date</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
@@ -331,16 +327,28 @@ export const AdminUsersPage = () => {
                     </td>
                     <td className="py-4 px-6"><div className="h-4 bg-[#161D19] w-20" /></td>
                     <td className="py-4 px-6"><div className="h-4 bg-[#161D19] w-16" /></td>
+                    <td className="py-4 px-6"><div className="h-4 bg-[#161D19] w-20" /></td>
                     <td className="py-4 px-6"><div className="h-4 bg-[#161D19] w-24" /></td>
                     <td className="py-4 px-6 text-right"><div className="h-8 bg-[#161D19] w-20 ml-auto" /></td>
                   </tr>
                 ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="py-8">
+                    <ErrorState
+                      title="Unable to Load User Records"
+                      message={error}
+                      onRetry={fetchUsers}
+                      retryLabel="Retry Loading"
+                    />
+                  </td>
+                </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400 space-y-2">
-                    <Users size={32} className="mx-auto text-gray-600 mb-2" />
+                  <td colSpan={7} className="py-12 text-center text-gray-400 space-y-2">
+                    <Users size={32} className="mx-auto text-gray-500 mb-2" />
                     <p className="font-serif text-lg text-[#F3F4F6]">No user accounts found.</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-400">
                       Try clearing your search terms or adjusting the status filter.
                     </p>
                   </td>
@@ -385,12 +393,13 @@ export const AdminUsersPage = () => {
                       <td className="py-4 px-6">
                         <div className="space-y-1">
                           {getRoleBadge(userObj)}
-                          <p className="text-[10px] uppercase text-gray-500 tracking-wider">
+                          <p className="text-[10px] uppercase text-gray-400 tracking-wider">
                             Via {userObj.auth_provider || 'Email'}
                           </p>
                         </div>
                       </td>
 
+                      {/* Account Status (is_active) */}
                       <td className="py-4 px-6">
                         <span className={`inline-flex items-center gap-1.5 text-[10px] uppercase font-bold px-2.5 py-1 border ${
                           userObj.is_active
@@ -399,6 +408,18 @@ export const AdminUsersPage = () => {
                         }`}>
                           {userObj.is_active ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
                           {userObj.is_active ? 'Active' : 'Blocked'}
+                        </span>
+                      </td>
+
+                      {/* Email Verification Status (is_email_verified) */}
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center gap-1.5 text-[10px] uppercase font-bold px-2.5 py-1 border ${
+                          userObj.is_email_verified
+                            ? 'text-emerald-400 bg-emerald-950/60 border-emerald-800/50'
+                            : 'text-amber-400 bg-amber-950/60 border-amber-800/50'
+                        }`}>
+                          {userObj.is_email_verified ? <ShieldCheck size={12} /> : <AlertCircle size={12} />}
+                          {userObj.is_email_verified ? 'Verified' : 'Unverified'}
                         </span>
                       </td>
 
@@ -531,6 +552,13 @@ export const AdminUsersPage = () => {
                   }`}>
                     {selectedUser.is_active ? 'Active' : 'Blocked'}
                   </span>
+                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 border ${
+                    selectedUser.is_email_verified
+                      ? 'text-emerald-400 bg-emerald-950/60 border-emerald-800/50'
+                      : 'text-amber-400 bg-amber-950/60 border-amber-800/50'
+                  }`}>
+                    {selectedUser.is_email_verified ? 'Verified Email' : 'Unverified Email'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -538,14 +566,14 @@ export const AdminUsersPage = () => {
             {/* Key Information Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="p-3 bg-[#161D19] border border-[#1E2922] space-y-1">
-                <span className="text-gray-500 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
+                <span className="text-gray-400 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
                   <Mail size={12} className="text-[#10B981]" /> Email Address
                 </span>
                 <p className="font-semibold text-[#F3F4F6] break-all">{selectedUser.email}</p>
               </div>
 
               <div className="p-3 bg-[#161D19] border border-[#1E2922] space-y-1">
-                <span className="text-gray-500 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
+                <span className="text-gray-400 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
                   <Phone size={12} className="text-[#10B981]" /> Phone Number
                 </span>
                 <p className="font-semibold text-[#F3F4F6]">
@@ -554,7 +582,7 @@ export const AdminUsersPage = () => {
               </div>
 
               <div className="p-3 bg-[#161D19] border border-[#1E2922] space-y-1">
-                <span className="text-gray-500 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
+                <span className="text-gray-400 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
                   <ShieldCheck size={12} className="text-[#10B981]" /> Email Verification Status
                 </span>
                 <p className="font-semibold text-[#F3F4F6]">
@@ -563,7 +591,7 @@ export const AdminUsersPage = () => {
               </div>
 
               <div className="p-3 bg-[#161D19] border border-[#1E2922] space-y-1">
-                <span className="text-gray-500 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
+                <span className="text-gray-400 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
                   <Lock size={12} className="text-[#10B981]" /> Authentication Method
                 </span>
                 <p className="font-semibold text-[#F3F4F6] uppercase">
@@ -572,7 +600,7 @@ export const AdminUsersPage = () => {
               </div>
 
               <div className="p-3 bg-[#161D19] border border-[#1E2922] space-y-1">
-                <span className="text-gray-500 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
+                <span className="text-gray-400 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
                   <Calendar size={12} className="text-[#10B981]" /> Registration Date
                 </span>
                 <p className="font-semibold text-[#F3F4F6]">
@@ -581,7 +609,7 @@ export const AdminUsersPage = () => {
               </div>
 
               <div className="p-3 bg-[#161D19] border border-[#1E2922] space-y-1">
-                <span className="text-gray-500 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
+                <span className="text-gray-400 uppercase tracking-wider text-[10px] font-bold block flex items-center gap-1">
                   <Clock size={12} className="text-[#10B981]" /> Last Login Time
                 </span>
                 <p className="font-semibold text-[#F3F4F6]">
@@ -621,7 +649,7 @@ export const AdminUsersPage = () => {
                   </Button>
                 </div>
               ) : (
-                <span className="text-xs text-gray-500 italic">
+                <span className="text-xs text-gray-400 italic">
                   (You are viewing your active administrator profile)
                 </span>
               )}

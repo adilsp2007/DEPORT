@@ -5,6 +5,7 @@ import { useShop } from '../context/ShopContext';
 import userService from '../services/userService';
 import authService from '../services/authService';
 import addressService from '../services/addressService';
+import { validateIndianPhoneNumber } from '../utils/phoneValidation';
 import AccountSidebar from '../components/AccountSidebar';
 import Input from '../components/Input';
 import Button from '../components/Button';
@@ -49,6 +50,15 @@ export const ProfilePage = () => {
   const [passwordErrors, setPasswordErrors] = useState({});
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // Phone Update Modal State
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneFieldError, setPhoneFieldError] = useState('');
+  const [isPhoneValid, setIsPhoneValid] = useState(false);
+  const [phoneSuccess, setPhoneSuccess] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [updatingPhone, setUpdatingPhone] = useState(false);
+
   useEffect(() => {
     if (user) {
       setTwoFactorEnabled(Boolean(user.is_two_factor_enabled));
@@ -74,6 +84,73 @@ export const ProfilePage = () => {
   if (!user) return null;
 
   const initials = `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`.toUpperCase() || 'U';
+
+  // Phone Update Handlers
+  const openPhoneModal = () => {
+    const currentPhone = user?.phone || '';
+    setPhoneInput(currentPhone);
+    setPhoneSuccess('');
+    setPhoneError('');
+    if (currentPhone) {
+      const res = validateIndianPhoneNumber(currentPhone, true);
+      setPhoneFieldError(res.isValid ? '' : res.error);
+      setIsPhoneValid(res.isValid);
+    } else {
+      setPhoneFieldError('');
+      setIsPhoneValid(false);
+    }
+    setIsPhoneModalOpen(true);
+  };
+
+  const handlePhoneInputChange = (e) => {
+    const val = e.target.value;
+    setPhoneInput(val);
+    setPhoneSuccess('');
+    setPhoneError('');
+
+    const res = validateIndianPhoneNumber(val, true);
+    if (!res.isValid) {
+      setPhoneFieldError(res.error);
+      setIsPhoneValid(false);
+    } else {
+      setPhoneFieldError('');
+      setIsPhoneValid(true);
+    }
+  };
+
+  const handlePhoneSubmit = async (e) => {
+    e.preventDefault();
+    setPhoneError('');
+    setPhoneSuccess('');
+
+    const res = validateIndianPhoneNumber(phoneInput, true);
+    if (!res.isValid) {
+      setPhoneFieldError(res.error);
+      setIsPhoneValid(false);
+      return;
+    }
+
+    setUpdatingPhone(true);
+    try {
+      await userService.updateMyProfile({ phone: res.cleaned });
+      await refreshUser();
+      setPhoneSuccess('Phone number updated successfully.');
+      showToast('Phone number updated successfully.');
+      setTimeout(() => {
+        setIsPhoneModalOpen(false);
+        setPhoneSuccess('');
+      }, 1000);
+    } catch (err) {
+      const resp = err.response?.data;
+      const errMsg = resp?.phone || resp?.detail || 'Failed to update phone number. Please try again.';
+      const formatted = Array.isArray(errMsg) ? errMsg[0] : String(errMsg);
+      setPhoneError(formatted);
+      setPhoneFieldError(formatted);
+      showToast(formatted, 'error');
+    } finally {
+      setUpdatingPhone(false);
+    }
+  };
 
   // Toggle Two-Step Verification
   const handleToggleTwoFactor = async () => {
@@ -200,7 +277,7 @@ export const ProfilePage = () => {
                     </span>
                   )}
                   <span className="flex items-center gap-1.5">
-                    <Calendar size={14} className="text-gray-500" />
+                    <Calendar size={14} className="text-[#10B981]" />
                     Member since {new Date(user.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                   </span>
                 </div>
@@ -208,23 +285,40 @@ export const ProfilePage = () => {
             </div>
 
             {/* Detailed Info Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-6">
               <div>
-                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 block mb-1">
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400 block mb-1">
                   First Name
                 </span>
                 <p className="text-sm font-medium text-[#F3F4F6]">{user.first_name || '—'}</p>
               </div>
 
               <div>
-                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 block mb-1">
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400 block mb-1">
                   Last Name
                 </span>
                 <p className="text-sm font-medium text-[#F3F4F6]">{user.last_name || '—'}</p>
               </div>
 
               <div>
-                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 block mb-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400 block">
+                    Phone Number
+                  </span>
+                  <button
+                    type="button"
+                    onClick={openPhoneModal}
+                    className="text-[11px] text-[#10B981] hover:underline cursor-pointer flex items-center gap-1 font-semibold"
+                  >
+                    <Edit2 size={11} />
+                    <span>{user.phone ? 'Update' : 'Add'}</span>
+                  </button>
+                </div>
+                <p className="text-sm font-medium text-[#F3F4F6] font-mono">{user.phone || 'Not provided'}</p>
+              </div>
+
+              <div>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400 block mb-1">
                   Auth Method
                 </span>
                 <p className="text-sm font-medium text-[#10B981] uppercase tracking-wider font-mono">
@@ -347,7 +441,7 @@ export const ProfilePage = () => {
             </div>
 
             {loadingAddress ? (
-              <div className="p-6 text-center text-xs text-gray-500 uppercase tracking-wider">
+              <div className="p-6 text-center text-xs text-gray-400 uppercase tracking-wider">
                 Loading primary address...
               </div>
             ) : defaultAddress ? (
@@ -467,6 +561,91 @@ export const ProfilePage = () => {
                   loading={changingPassword}
                 >
                   Update Password
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Phone Number Update Modal */}
+      {isPhoneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-md bg-[#131915] border border-[#1E2922] p-6 sm:p-8 space-y-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-[#1E2922]">
+              <div className="flex items-center gap-2.5 text-[#10B981]">
+                <Phone size={20} />
+                <h3 className="font-serif text-lg font-bold text-[#F3F4F6]">
+                  Update Phone Number
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPhoneModalOpen(false);
+                  setPhoneError('');
+                  setPhoneSuccess('');
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {phoneSuccess && (
+              <div className="p-3 bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle2 size={14} className="shrink-0" />
+                <span>{phoneSuccess}</span>
+              </div>
+            )}
+
+            {phoneError && (
+              <div className="p-3 bg-rose-950/40 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>{phoneError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handlePhoneSubmit} className="space-y-4">
+              <div>
+                <Input
+                  label="Indian Mobile Number"
+                  type="tel"
+                  placeholder="e.g. 9876543210 or +91 9876543210"
+                  value={phoneInput}
+                  onChange={handlePhoneInputChange}
+                  error={phoneFieldError}
+                  icon={Phone}
+                  required
+                />
+                {phoneInput && !phoneFieldError && (
+                  <p className="text-xs text-[#10B981] mt-1.5 flex items-center gap-1 font-medium">
+                    <CheckCircle2 size={13} />
+                    Valid 10-digit Indian mobile number
+                  </p>
+                )}
+                <p className="text-[11px] text-gray-400 mt-1">
+                  10-digit Indian mobile number starting with 6, 7, 8, or 9 (optional +91).
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsPhoneModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  loading={updatingPhone}
+                  disabled={!isPhoneValid || updatingPhone}
+                >
+                  Save Phone Number
                 </Button>
               </div>
             </form>

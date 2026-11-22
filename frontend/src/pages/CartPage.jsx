@@ -207,8 +207,15 @@ export const CartPage = () => {
                           {formatINR(price)}
                         </span>
                         {product.compare_at_price && Number(product.compare_at_price) > Number(price) && (
-                          <span className="text-[10px] text-gray-500 line-through">
+                          <span className="text-[10px] text-gray-400 line-through">
                             {formatINR(product.compare_at_price)}
+                          </span>
+                        )}
+                        {product.category_offer && (
+                          <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800 px-1.5 py-0.2">
+                            {product.category_offer.offer_type === 'percentage'
+                              ? `${parseFloat(product.category_offer.offer_value)}% off`
+                              : `${formatINR(product.category_offer.offer_value)} off`}
                           </span>
                         )}
                         <span className="text-[11px] text-gray-400">each</span>
@@ -232,7 +239,7 @@ export const CartPage = () => {
                       disabled={isOutOfStock || isUnlisted}
                       size="sm"
                     />
-                    <span className="text-[10px] text-gray-500">
+                    <span className="text-[10px] text-gray-400">
                       {isOutOfStock ? '0 in stock' : `Max: ${Math.min(stock, 10)}`}
                     </span>
                   </div>

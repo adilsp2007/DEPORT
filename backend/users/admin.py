@@ -5,12 +5,13 @@ from .models import User, NewsletterSubscriber
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('email', 'first_name', 'last_name', 'auth_provider', 'is_staff', 'is_active', 'created_at')
-    list_filter = ('auth_provider', 'is_staff', 'is_active', 'created_at')
+    list_display = ('email', 'first_name', 'last_name', 'auth_provider', 'is_email_verified', 'is_active', 'is_staff', 'created_at')
+    list_filter = ('is_email_verified', 'is_active', 'auth_provider', 'is_staff', 'created_at')
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal Info', {'fields': ('first_name', 'last_name', 'phone', 'profile_image')}),
-        ('Permissions', {'fields': ('auth_provider', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Verification & Account Status', {'fields': ('is_email_verified', 'is_active')}),
+        ('Permissions', {'fields': ('auth_provider', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'created_at', 'updated_at')}),
     )
     readonly_fields = ('created_at', 'updated_at', 'last_login')

@@ -220,6 +220,7 @@ def send_deport_otp_email(email, code, first_name='', subject="DEPORT - Verifica
 
 
 class RegisterView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -246,8 +247,7 @@ class RegisterView(APIView):
                     'user': user_data,
                     'email': user.email,
                     'email_sent': False,
-                    'detail': f'Registration succeeded, but the verification code email could not be delivered: {email_msg}. Please click Resend Code to try again.',
-                    'otp_code': code if is_test else None
+                    'detail': f'Registration succeeded, but the verification code email could not be delivered: {email_msg}. Please click Resend Code to try again.'
                 }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
             msg = 'Registration successful. Verification OTP sent to your email.'
@@ -255,24 +255,8 @@ class RegisterView(APIView):
                 'user': user_data,
                 'email': user.email,
                 'email_sent': True,
-                'message': msg,
-                'otp_code': code if is_test else None
+                'message': msg
             }, status=status.HTTP_201_CREATED)
-
-        first_error = None
-        for field, errors in serializer.errors.items():
-            if isinstance(errors, list) and errors:
-                first_error = errors[0]
-                break
-            elif isinstance(errors, str):
-                first_error = errors
-                break
-
-        err_data = dict(serializer.errors)
-        if first_error and 'detail' not in err_data:
-            err_data['detail'] = first_error
-
-        return Response(err_data, status=status.HTTP_400_BAD_REQUEST)
 
         first_error = None
         for field, errors in serializer.errors.items():
@@ -291,6 +275,7 @@ class RegisterView(APIView):
 
 
 class VerifyEmailView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -310,16 +295,12 @@ class VerifyEmailView(APIView):
                 return Response({'detail': 'No account registered with this email address.', 'not_found': True}, status=status.HTTP_404_NOT_FOUND)
 
             if user.is_email_verified:
-                tokens = get_tokens_for_user(user)
-                user_data = UserSerializer(user, context={'request': request}).data
                 return Response({
-                    'user': user_data,
-                    'access': tokens['access'],
-                    'refresh': tokens['refresh'],
-                    'message': 'Account is already verified. Logged in successfully.',
+                    'detail': 'This account has already been verified. Please log in.',
+                    'message': 'This account has already been verified. Please log in.',
                     'already_verified': True,
                     'is_email_verified': True
-                }, status=status.HTTP_200_OK)
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             success, message, reason = user.verify_otp(code)
             if not success:
@@ -342,6 +323,7 @@ class VerifyEmailView(APIView):
 
 
 class OTPStatusView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
@@ -378,6 +360,7 @@ class OTPStatusView(APIView):
 
 
 class ResendOTPView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -396,7 +379,7 @@ class ResendOTPView(APIView):
             if user.is_email_verified:
                 return Response({'detail': 'This account has already been verified. Please log in.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            cooldown_seconds = getattr(settings, 'OTP_RESEND_COOLDOWN_SECONDS', 60)
+            cooldown_seconds = getattr(settings, 'OTP_RESEND_COOLDOWN_SECONDS', 30)
             if user.otp_created_at:
                 now = timezone.now()
                 seconds_since = (now - user.otp_created_at).total_seconds()
@@ -424,20 +407,19 @@ class ResendOTPView(APIView):
                 user.save(update_fields=['otp_created_at'])
                 return Response({
                     'detail': f'Failed to deliver verification code email: {email_msg}. Please check your email configuration or try again.',
-                    'email_sent': False,
-                    'otp_code': code if is_test else None
+                    'email_sent': False
                 }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
             msg = 'A new verification code has been sent.'
             return Response({
                 'message': msg,
                 'email_sent': True,
-                'cooldown': cooldown_seconds,
-                'otp_code': code if is_test else None
+                'cooldown': cooldown_seconds
             }, status=status.HTTP_200_OK)
 
 
 class LoginView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -466,7 +448,8 @@ class LoginView(APIView):
             if existing_user and existing_user.check_password(password):
                 if not existing_user.is_email_verified:
                     return Response({
-                        'detail': 'Your email address is not yet verified. Please enter your verification code.',
+                        'detail': 'Please verify your email address before logging in.',
+                        'message': 'Please verify your email address before logging in.',
                         'is_unverified': True,
                         'email': email
                     }, status=status.HTTP_403_FORBIDDEN)
@@ -482,7 +465,8 @@ class LoginView(APIView):
 
         if not user.is_email_verified:
             return Response({
-                'detail': 'Your email address is not yet verified. Please enter your verification code.',
+                'detail': 'Please verify your email address before logging in.',
+                'message': 'Please verify your email address before logging in.',
                 'is_unverified': True,
                 'email': email
             }, status=status.HTTP_403_FORBIDDEN)
@@ -514,7 +498,6 @@ class LoginView(APIView):
             return Response({
                 'requires_two_step': True,
                 'email': user.email,
-                'otp_code': code if is_test_environment() else None,
                 'message': 'Two-step verification code sent to your email.'
             }, status=status.HTTP_200_OK)
 
@@ -531,6 +514,7 @@ class LoginView(APIView):
 
 
 class AdminLoginView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -546,27 +530,38 @@ class AdminLoginView(APIView):
         if user is None:
             existing_user = User.objects.filter(email=email).first()
             if existing_user and existing_user.check_password(password):
-                if not existing_user.is_active:
-                    return Response({
-                        'detail': 'This administrator account has been deactivated.'
-                    }, status=status.HTTP_403_FORBIDDEN)
                 if not (existing_user.is_staff or existing_user.is_superuser):
                     return Response({
                         'detail': 'Access denied. You do not have administrator permissions.'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                if not existing_user.is_email_verified:
+                    return Response({
+                        'detail': 'Please verify your administrator email address before logging in.',
+                        'is_unverified': True
+                    }, status=status.HTTP_403_FORBIDDEN)
+                if not existing_user.is_active:
+                    return Response({
+                        'detail': 'This administrator account has been deactivated.'
                     }, status=status.HTTP_403_FORBIDDEN)
 
             return Response({
                 'detail': 'Invalid email or password.'
             }, status=status.HTTP_401_UNAUTHORIZED)
 
-        if not user.is_active:
-            return Response({
-                'detail': 'This administrator account has been deactivated.'
-            }, status=status.HTTP_403_FORBIDDEN)
-
         if not (user.is_staff or user.is_superuser):
             return Response({
                 'detail': 'Access denied. You do not have administrator permissions.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if not user.is_email_verified:
+            return Response({
+                'detail': 'Please verify your administrator email address before logging in.',
+                'is_unverified': True
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if not user.is_active:
+            return Response({
+                'detail': 'This administrator account has been deactivated.'
             }, status=status.HTTP_403_FORBIDDEN)
 
         update_last_login(None, user)
@@ -585,9 +580,13 @@ class AdminDashboardStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
 
     def get(self, request):
-        total_users = User.objects.count()
-        active_users = User.objects.filter(is_active=True).count()
-        blocked_users = User.objects.filter(is_active=False).count()
+        # Customer statistics strictly reflect email-verified users
+        verified_users_qs = User.objects.filter(is_email_verified=True)
+        total_users = verified_users_qs.count()
+        active_users = verified_users_qs.filter(is_active=True).count()
+        blocked_users = verified_users_qs.filter(is_active=False).count()
+        verified_users = total_users
+        unverified_users = User.objects.filter(is_email_verified=False).count()
         total_products = Product.objects.count() if Product else 0
         total_orders = Order.objects.count() if Order else 0
 
@@ -612,7 +611,7 @@ class AdminDashboardStatsView(APIView):
             active_coupons = Coupon.objects.filter(is_active=True).count()
 
         recent_users = UserSerializer(
-            User.objects.order_by('-created_at')[:5],
+            User.objects.filter(is_email_verified=True).order_by('-created_at')[:5],
             many=True,
             context={'request': request}
         ).data
@@ -640,6 +639,8 @@ class AdminDashboardStatsView(APIView):
             'total_users': total_users,
             'active_users': active_users,
             'blocked_users': blocked_users,
+            'verified_users': verified_users,
+            'unverified_users': unverified_users,
             'total_products': total_products,
             'total_orders': total_orders,
             'total_revenue': total_revenue,
@@ -660,7 +661,17 @@ class AdminUserListView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
 
     def get(self, request):
-        queryset = User.objects.all().order_by('-created_at')
+        status_param = request.query_params.get('status', '').strip().lower()
+        verified_param = request.query_params.get('verified', '').strip().lower()
+
+        # By default: ONLY users who have completed email verification enter User Management!
+        if status_param == 'unverified' or verified_param in ('false', '0'):
+            queryset = User.objects.filter(is_email_verified=False).order_by('-created_at')
+        elif status_param in ('all', 'all_with_unverified'):
+            queryset = User.objects.all().order_by('-created_at')
+        else:
+            # Default behavior: ONLY users who have completed email verification appear in admin user management
+            queryset = User.objects.filter(is_email_verified=True).order_by('-created_at')
 
         # Search parameter (email, first_name, last_name, phone)
         search_query = request.query_params.get('search', '').strip()
@@ -673,7 +684,6 @@ class AdminUserListView(APIView):
             )
 
         # Status filter parameter (active / blocked)
-        status_param = request.query_params.get('status', '').strip().lower()
         if status_param == 'active':
             queryset = queryset.filter(is_active=True)
         elif status_param == 'blocked':
@@ -762,6 +772,7 @@ class AdminUserToggleBlockView(APIView):
 
 
 class GoogleConfigView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
@@ -786,6 +797,7 @@ class GoogleConfigView(APIView):
 
 
 class GoogleAuthView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -933,17 +945,22 @@ class GoogleAuthView(APIView):
         user = User.objects.filter(email=email).first()
 
         if user:
-            # Enforce that suspended/blocked accounts CANNOT log in via Google
+            # If the account is inactive, only allow linking if it is a pending unverified registration with an active OTP challenge
             if not user.is_active:
-                return Response({
-                    'detail': 'This account has been deactivated or suspended. Please contact customer support.'
-                }, status=status.HTTP_403_FORBIDDEN)
+                is_pending_signup = not user.is_email_verified and bool(user.otp_code)
+                if not is_pending_signup:
+                    return Response({
+                        'detail': 'This account has been deactivated or suspended. Please contact customer support.'
+                    }, status=status.HTTP_403_FORBIDDEN)
 
-            # Safe account linking
+            # Safe account linking: Google OAuth confirms email ownership
             updated_fields = []
             if not user.is_email_verified:
                 user.is_email_verified = True
-                updated_fields.append('is_email_verified')
+                user.is_active = True
+                user.otp_code = None
+                user.otp_created_at = None
+                updated_fields.extend(['is_email_verified', 'is_active', 'otp_code', 'otp_created_at'])
             if not user.first_name and first_name:
                 user.first_name = first_name
                 updated_fields.append('first_name')
@@ -983,7 +1000,6 @@ class GoogleAuthView(APIView):
             return Response({
                 'requires_two_step': True,
                 'email': user.email,
-                'otp_code': otp_code if is_test_environment() else None,
                 'message': 'Two-step verification code sent to your email.'
             }, status=status.HTTP_200_OK)
 
@@ -1028,7 +1044,21 @@ class CurrentUserView(APIView):
             serializer.save()
             updated_user = UserSerializer(request.user, context={'request': request}).data
             return Response(updated_user, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        first_error_msg = 'Invalid profile information.'
+        for field, errs in serializer.errors.items():
+            if isinstance(errs, (list, tuple)) and errs:
+                first_error_msg = str(errs[0])
+                break
+            elif isinstance(errs, str):
+                first_error_msg = errs
+                break
+
+        response_data = dict(serializer.errors)
+        if 'detail' not in response_data:
+            response_data['detail'] = first_error_msg
+
+        return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
 
     def put(self, request):
         return self.patch(request)
@@ -1098,6 +1128,7 @@ class ToggleTwoFactorView(APIView):
 
 
 class ForgotPasswordRequestView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
@@ -1124,6 +1155,7 @@ class ForgotPasswordRequestView(APIView):
 
 
 class ForgotPasswordResetView(APIView):
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):

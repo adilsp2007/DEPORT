@@ -1,3 +1,4 @@
+import re
 from rest_framework import serializers
 from .models import Address
 
@@ -19,11 +20,18 @@ class AddressSerializer(serializers.ModelSerializer):
         return value
 
     def validate_phone(self, value):
-        if not value or not value.strip():
+        if not value or not str(value).strip():
             raise serializers.ValidationError("Phone number is required.")
-        cleaned = value.strip()
-        if len(cleaned) < 5 or len(cleaned) > 30:
-            raise serializers.ValidationError("Please enter a valid phone number.")
+        cleaned = str(value).strip()
+        if not re.match(r'^\+?[0-9\s\-()]{7,25}$', cleaned):
+            raise serializers.ValidationError("Please enter a valid delivery contact number (e.g. +91 9876543210).")
+        digits = re.sub(r'\D', '', cleaned)
+        if len(digits) < 7:
+            raise serializers.ValidationError("Phone number is too short. It must contain at least 7 digits.")
+        if len(digits) > 15:
+            raise serializers.ValidationError("Phone number cannot exceed 15 digits.")
+        if len(set(digits)) <= 1:
+            raise serializers.ValidationError("Please enter a valid, active contact number.")
         return cleaned
 
     def validate_full_name(self, value):

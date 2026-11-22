@@ -6,7 +6,6 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 from rest_framework import status
-
 User = get_user_model()
 
 
@@ -37,10 +36,22 @@ class AuthenticationTestCase(TestCase):
             'confirm_password': 'StrongPassword123!'
         }
 
+    def _get_latest_otp(self, user=None):
+        if user and getattr(user, '_raw_otp', None):
+            return user._raw_otp
+        from django.core import mail
+        import re
+        if mail.outbox:
+            m = re.search(r'\b\d{6}\b', mail.outbox[-1].body)
+            if m:
+                return m.group(0)
+        return None
+
     def _register_and_verify(self, user_data=None):
         data = user_data or self.user_data
         reg_resp = self.client.post(self.register_url, data, format='json')
-        code = reg_resp.data.get('otp_code')
+        user = User.objects.get(email=data['email'])
+        code = self._get_latest_otp(user) or reg_resp.data.get('otp_code')
         verify_resp = self.client.post(self.verify_email_url, {'email': data['email'], 'code': code}, format='json')
         login_resp = self.client.post(self.login_url, {'email': data['email'], 'password': data['password']}, format='json')
         return login_resp
@@ -53,7 +64,8 @@ class AuthenticationTestCase(TestCase):
 
     def test_verify_email_success(self):
         reg_resp = self.client.post(self.register_url, self.user_data, format='json')
-        code = reg_resp.data.get('otp_code')
+        user = User.objects.get(email='eleanor.vance@example.com')
+        code = self._get_latest_otp(user) or reg_resp.data.get('otp_code')
         response = self.client.post(self.verify_email_url, {'email': 'eleanor.vance@example.com', 'code': code}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['message'], 'Email verified successfully.')
@@ -91,9 +103,24 @@ class AuthenticationTestCase(TestCase):
 
     def test_duplicate_email_registration(self):
         self.client.post(self.register_url, self.user_data, format='json')
+        user = User.objects.get(email=self.user_data['email'])
+        user.is_email_verified = True
+        user.save()
         response = self.client.post(self.register_url, self.user_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('email', response.data)
+
+    def test_existing_unverified_email_registration(self):
+        r1 = self.client.post(self.register_url, self.user_data, format='json')
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
+        data2 = self.user_data.copy()
+        data2['first_name'] = 'UpdatedEleanor'
+        r2 = self.client.post(self.register_url, data2, format='json')
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(r2.data.get('email_sent'))
+        user = User.objects.get(email=self.user_data['email'])
+        self.assertEqual(user.first_name, 'UpdatedEleanor')
+        self.assertEqual(User.objects.filter(email=self.user_data['email']).count(), 1)
 
     def test_password_mismatch_registration(self):
         data = self.user_data.copy()
@@ -237,13 +264,13 @@ class AuthenticationTestCase(TestCase):
         update_data = {
             'first_name': 'Eleanor Updated',
             'last_name': 'Vance Updated',
-            'phone': '+1 (555) 999-8888'
+            'phone': '+919876543210'
         }
         response = self.client.patch(self.me_url, update_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['first_name'], 'Eleanor Updated')
         self.assertEqual(response.data['last_name'], 'Vance Updated')
-        self.assertEqual(response.data['phone'], '+1 (555) 999-8888')
+        self.assertEqual(response.data['phone'], '+919876543210')
 
     def test_update_profile_email(self):
         login_resp = self._register_and_verify()
@@ -525,6 +552,17 @@ class OTPVerificationComprehensiveTestCase(TestCase):
             'confirm_password': 'SecureAtelierPassword2026!'
         }
 
+    def _get_latest_otp(self, user=None):
+        if user and getattr(user, '_raw_otp', None):
+            return user._raw_otp
+        from django.core import mail
+        import re
+        if mail.outbox:
+            m = re.search(r'\b\d{6}\b', mail.outbox[-1].body)
+            if m:
+                return m.group(0)
+        return None
+
     def test_01_signup_creates_verification_challenge(self):
         resp = self.client.post(self.register_url, self.signup_payload, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
@@ -537,7 +575,7 @@ class OTPVerificationComprehensiveTestCase(TestCase):
         self.assertEqual(user.otp_attempts, 0)
 
         # Stored OTP must be a secure hash, NOT the plaintext 6-digit number
-        raw_code = resp.data.get('otp_code')
+        raw_code = self._get_latest_otp(user)
         self.assertTrue(len(user.otp_code) > 20)
         from django.contrib.auth.hashers import check_password
         self.assertTrue(check_password(raw_code, user.otp_code))
@@ -551,7 +589,8 @@ class OTPVerificationComprehensiveTestCase(TestCase):
         sent_email = mail.outbox[0]
         self.assertEqual(sent_email.to, ['alexander.mcqueen@deport-atelier.com'])
         self.assertIn('DEPORT', sent_email.subject)
-        code = resp.data.get('otp_code')
+        user = User.objects.get(email='alexander.mcqueen@deport-atelier.com')
+        code = self._get_latest_otp(user)
         self.assertIn(code, sent_email.body)
 
     @patch('users.views.send_deport_otp_email')
@@ -564,7 +603,8 @@ class OTPVerificationComprehensiveTestCase(TestCase):
 
     def test_04_correct_otp_verifies_intended_account(self):
         reg_resp = self.client.post(self.register_url, self.signup_payload, format='json')
-        code = reg_resp.data.get('otp_code')
+        user = User.objects.get(email='alexander.mcqueen@deport-atelier.com')
+        code = self._get_latest_otp(user)
 
         verify_resp = self.client.post(self.verify_url, {
             'email': 'alexander.mcqueen@deport-atelier.com',
@@ -598,9 +638,9 @@ class OTPVerificationComprehensiveTestCase(TestCase):
         from django.utils import timezone
         from datetime import timedelta
         reg_resp = self.client.post(self.register_url, self.signup_payload, format='json')
-        code = reg_resp.data.get('otp_code')
-
         user = User.objects.get(email='alexander.mcqueen@deport-atelier.com')
+        code = self._get_latest_otp(user)
+
         user.otp_created_at = timezone.now() - timedelta(minutes=10)
         user.save()
 
@@ -614,7 +654,8 @@ class OTPVerificationComprehensiveTestCase(TestCase):
 
     def test_07_otp_cannot_be_reused(self):
         reg_resp = self.client.post(self.register_url, self.signup_payload, format='json')
-        code = reg_resp.data.get('otp_code')
+        user = User.objects.get(email=self.signup_payload['email'])
+        code = self._get_latest_otp(user)
 
         v1 = self.client.post(self.verify_url, {'email': self.signup_payload['email'], 'code': code}, format='json')
         self.assertEqual(v1.status_code, status.HTTP_200_OK)
@@ -629,15 +670,16 @@ class OTPVerificationComprehensiveTestCase(TestCase):
         from django.utils import timezone
         from datetime import timedelta
         reg_resp = self.client.post(self.register_url, self.signup_payload, format='json')
-        otp_1 = reg_resp.data.get('otp_code')
-
         user = User.objects.get(email=self.signup_payload['email'])
+        otp_1 = self._get_latest_otp(user)
+
         user.otp_created_at = timezone.now() - timedelta(seconds=65)
         user.save()
 
         resend_resp = self.client.post(self.resend_url, {'email': self.signup_payload['email']}, format='json')
         self.assertEqual(resend_resp.status_code, status.HTTP_200_OK)
-        otp_2 = resend_resp.data.get('otp_code')
+        user.refresh_from_db()
+        otp_2 = self._get_latest_otp(user)
         self.assertNotEqual(otp_1, otp_2)
 
         # Old OTP 1 rejected
@@ -657,7 +699,8 @@ class OTPVerificationComprehensiveTestCase(TestCase):
 
     def test_10_excessive_verification_attempts_rate_limited(self):
         reg_resp = self.client.post(self.register_url, self.signup_payload, format='json')
-        valid_code = reg_resp.data.get('otp_code')
+        user = User.objects.get(email=self.signup_payload['email'])
+        valid_code = self._get_latest_otp(user)
 
         for _ in range(4):
             v_fail = self.client.post(self.verify_url, {'email': self.signup_payload['email'], 'code': '000000'}, format='json')
@@ -698,8 +741,10 @@ class OTPVerificationComprehensiveTestCase(TestCase):
         u2_payload = dict(self.signup_payload, email='victim2@deport.com')
 
         r1 = self.client.post(self.register_url, u1_payload, format='json')
+        user1 = User.objects.get(email='victim1@deport.com')
+        code1 = self._get_latest_otp(user1)
+
         r2 = self.client.post(self.register_url, u2_payload, format='json')
-        code1 = r1.data.get('otp_code')
 
         cross_resp = self.client.post(self.verify_url, {
             'email': 'victim2@deport.com',
@@ -712,7 +757,8 @@ class OTPVerificationComprehensiveTestCase(TestCase):
 
     def test_13_contract_supports_both_code_and_otp_fields(self):
         reg_resp = self.client.post(self.register_url, self.signup_payload, format='json')
-        code = reg_resp.data.get('otp_code')
+        user = User.objects.get(email=self.signup_payload['email'])
+        code = self._get_latest_otp(user)
 
         verify_resp = self.client.post(self.verify_url, {
             'email': self.signup_payload['email'],
@@ -767,10 +813,10 @@ class OTPVerificationComprehensiveTestCase(TestCase):
         }
         resp = self.client.post(signup_alias_url, alias_payload, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        raw_code = resp.data.get('otp_code')
+        user = User.objects.get(email=alias_payload['email'])
+        raw_code = self._get_latest_otp(user)
         self.assertTrue(raw_code)
 
-        user = User.objects.get(email=alias_payload['email'])
         self.assertFalse(user.is_email_verified)
         self.assertEqual(user.first_name, 'Gabbana')
         self.assertEqual(user.last_name, 'Dolce')

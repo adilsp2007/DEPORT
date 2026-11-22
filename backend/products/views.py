@@ -2,7 +2,9 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
+from django.utils import timezone
 from decimal import Decimal, InvalidOperation
 from users.permissions import IsAdminUser
 from .models import Product, ProductImage, Banner
@@ -401,23 +403,171 @@ class ProductImageAdminViewSet(viewsets.ModelViewSet):
 class BannerViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Public ViewSet for active promotional & hero banners.
-    Supports filtering by ?placement=hero, ?placement=promotional, etc.
+    Supports filtering by ?placement=hero, ?banner_type=hero, etc.
+    Hides inactive, expired, or scheduled future banners.
     """
     serializer_class = BannerSerializer
     permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
-        queryset = Banner.objects.filter(is_active=True).order_by('display_order', '-created_at')
-        placement = self.request.query_params.get('placement')
-        if placement:
-            queryset = queryset.filter(placement=placement)
+        now = timezone.now()
+        queryset = Banner.objects.filter(is_active=True).filter(
+            Q(start_date__isnull=True) | Q(start_date__lte=now),
+            Q(end_date__isnull=True) | Q(end_date__gte=now)
+        ).select_related('linked_category', 'linked_product').order_by('display_order', '-created_at')
+
+        b_type = (
+            self.request.query_params.get('banner_type') or
+            self.request.query_params.get('placement') or
+            self.request.query_params.get('type')
+        )
+        if b_type and b_type.strip() and b_type.strip().lower() not in ['all', 'all types', '']:
+            queryset = queryset.filter(placement__iexact=b_type.strip())
         return queryset
 
 
 class BannerAdminViewSet(viewsets.ModelViewSet):
     """
     Admin ViewSet for full Banner management.
+    Supports:
+    - Dynamic filtering by banner_type / placement (e.g. hero, promotional, secondary, all)
+    - Status filtering: active, inactive, expired, scheduled
+    - Search by banner title, subtitle, or tagline
+    - Date filtering (start_date, end_date)
+    - Full CRUD, toggle active status, and banner types endpoint
+    - Pagination via StandardResultsSetPagination
     """
-    queryset = Banner.objects.all().order_by('display_order', '-created_at')
     serializer_class = BannerSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    pagination_class = StandardResultsSetPagination
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        queryset = Banner.objects.all().select_related('linked_category', 'linked_product')
+
+        # 1. Filter by banner_type / placement
+        b_type = (
+            self.request.query_params.get('banner_type') or
+            self.request.query_params.get('placement') or
+            self.request.query_params.get('type')
+        )
+        if b_type and b_type.strip() and b_type.strip().lower() not in ['all', 'all types', '']:
+            queryset = queryset.filter(placement__iexact=b_type.strip())
+
+        # 2. Filter by status (active, inactive, expired, scheduled)
+        status_param = self.request.query_params.get('status')
+        if status_param and status_param.strip() and status_param.strip().lower() not in ['all', '']:
+            st = status_param.strip().lower()
+            now = timezone.now()
+            if st == 'active':
+                queryset = queryset.filter(
+                    is_active=True
+                ).filter(
+                    Q(start_date__isnull=True) | Q(start_date__lte=now)
+                ).filter(
+                    Q(end_date__isnull=True) | Q(end_date__gte=now)
+                )
+            elif st == 'inactive':
+                queryset = queryset.filter(is_active=False)
+            elif st == 'expired':
+                queryset = queryset.filter(is_active=True, end_date__lt=now)
+            elif st == 'scheduled':
+                queryset = queryset.filter(is_active=True, start_date__gt=now)
+
+        # 3. Search by title, subtitle, or tagline
+        search_query = self.request.query_params.get('search')
+        if search_query and search_query.strip():
+            s = search_query.strip()
+            queryset = queryset.filter(
+                Q(title__icontains=s) |
+                Q(subtitle__icontains=s) |
+                Q(tagline__icontains=s)
+            )
+
+        # 4. Date range filter
+        start_date = self.request.query_params.get('start_date')
+        if start_date and start_date.strip():
+            try:
+                date_val = start_date.strip().split('T')[0]
+                queryset = queryset.filter(
+                    Q(start_date__date__gte=date_val) | Q(created_at__date__gte=date_val)
+                )
+            except Exception:
+                pass
+
+        end_date = self.request.query_params.get('end_date')
+        if end_date and end_date.strip():
+            try:
+                date_val = end_date.strip().split('T')[0]
+                queryset = queryset.filter(
+                    Q(end_date__date__lte=date_val) | Q(created_at__date__lte=date_val)
+                )
+            except Exception:
+                pass
+
+        # 5. Ordering
+        ordering = self.request.query_params.get('ordering', 'display_order')
+        valid_orderings = {
+            'display_order': ['display_order', '-created_at'],
+            '-display_order': ['-display_order', '-created_at'],
+            'created_at': ['created_at'],
+            '-created_at': ['-created_at'],
+            'title': ['title'],
+            '-title': ['-title'],
+        }
+        order_fields = valid_orderings.get(ordering, ['display_order', '-created_at'])
+        return queryset.order_by(*order_fields)
+
+    @action(detail=False, methods=['get'], url_path='types')
+    def types(self, request):
+        """
+        Dynamically returns all available banner placement types.
+        """
+        type_list = [
+            {'value': val, 'label': label}
+            for val, label in Banner.PLACEMENT_CHOICES
+        ]
+        return Response(type_list)
+
+    @action(detail=True, methods=['post'], url_path='toggle-status')
+    def toggle_status(self, request, pk=None):
+        """
+        Toggles is_active between True and False.
+        """
+        banner = self.get_object()
+        banner.is_active = not banner.is_active
+        banner.save(update_fields=['is_active', 'updated_at'])
+        serializer = self.get_serializer(banner)
+        status_label = 'Activated' if banner.is_active else 'Deactivated'
+        return Response({
+            'message': f'Banner "{banner.title}" has been {status_label}.',
+            'banner': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='summary')
+    def summary(self, request):
+        """
+        Returns quick count metrics for banner admin tabs.
+        """
+        now = timezone.now()
+        all_banners = Banner.objects.all()
+        total = all_banners.count()
+        active = all_banners.filter(
+            is_active=True
+        ).filter(
+            Q(start_date__isnull=True) | Q(start_date__lte=now)
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=now)
+        ).count()
+        inactive = all_banners.filter(is_active=False).count()
+        expired = all_banners.filter(is_active=True, end_date__lt=now).count()
+        scheduled = all_banners.filter(is_active=True, start_date__gt=now).count()
+
+        return Response({
+            'total': total,
+            'active': active,
+            'inactive': inactive,
+            'expired': expired,
+            'scheduled': scheduled
+        })
+

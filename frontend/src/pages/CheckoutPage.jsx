@@ -25,6 +25,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { loadRazorpayScript } from '../utils/razorpay';
+import { parseApiError } from '../utils/errorHandler';
 
 export const CheckoutPage = () => {
   const queryClient = useQueryClient();
@@ -186,7 +187,15 @@ export const CheckoutPage = () => {
     e.preventDefault();
     const errs = {};
     if (!addressForm.full_name.trim()) errs.full_name = 'Full name is required.';
-    if (!addressForm.phone.trim()) errs.phone = 'Contact phone is required.';
+    if (!addressForm.phone.trim()) {
+      errs.phone = 'Contact phone is required.';
+    } else {
+      const cleanPhone = addressForm.phone.trim();
+      const digits = cleanPhone.replace(/\D/g, '');
+      if (!/^\+?[0-9\s\-()]{7,25}$/.test(cleanPhone) || digits.length < 7 || digits.length > 15 || new Set(digits).size <= 1) {
+        errs.phone = 'Please enter a valid contact phone number.';
+      }
+    }
     if (!addressForm.address_line_1.trim()) errs.address_line_1 = 'Street address is required.';
     if (!addressForm.city.trim()) errs.city = 'City is required.';
     if (!addressForm.state.trim()) errs.state = 'State / Province is required.';
@@ -361,8 +370,8 @@ export const CheckoutPage = () => {
         state: { order: createdOrder }
       });
     } catch (err) {
-      const msg = err.response?.data?.detail || err.response?.data?.error || 'Failed to place order. Please check item availability.';
-      showToast(msg, 'error');
+      const parsed = parseApiError(err, 'Failed to place order. Please check item availability.');
+      showToast(parsed.message, 'error');
     } finally {
       setSubmittingOrder(false);
     }
@@ -478,7 +487,7 @@ export const CheckoutPage = () => {
                         {addr.city}, {addr.state} {addr.postal_code}
                       </p>
                       <p className="text-xs text-gray-400">{addr.country}</p>
-                      <p className="text-[11px] text-gray-500 font-mono mt-2">
+                      <p className="text-[11px] text-gray-300 font-mono mt-2">
                         Phone: {addr.phone}
                       </p>
                     </div>
@@ -534,7 +543,7 @@ export const CheckoutPage = () => {
                   <p className="text-xs text-gray-400 mt-2 leading-relaxed font-light">
                     Pay securely using UPI (Google Pay, PhonePe, Paytm), Credit / Debit Cards, NetBanking, or Digital Wallets powered by Razorpay's 256-bit SSL encrypted gateway.
                   </p>
-                  <div className="mt-3 flex items-center gap-3 text-[11px] text-gray-500 font-mono">
+                  <div className="mt-3 flex items-center gap-3 text-[11px] text-gray-400 font-mono">
                     <span className="flex items-center gap-1 text-emerald-400">
                       <ShieldCheck size={13} /> 100% Secure Checkout
                     </span>
@@ -626,8 +635,15 @@ export const CheckoutPage = () => {
                         Qty: {item.quantity} × <strong className="text-white">{formatINR(unitPrice)}</strong>
                       </p>
                       {product.compare_at_price && Number(product.compare_at_price) > unitPrice && (
-                        <span className="text-[9px] text-gray-500 line-through">
+                        <span className="text-[9px] text-gray-400 line-through">
                           {formatINR(product.compare_at_price)}
+                        </span>
+                      )}
+                      {product.category_offer && (
+                        <span className="text-[9px] text-[#10B981] font-bold">
+                          ({product.category_offer.offer_type === 'percentage'
+                            ? `${parseFloat(product.category_offer.offer_value)}% off`
+                            : `${formatINR(product.category_offer.offer_value)} off`})
                         </span>
                       )}
                     </div>

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useShop } from '../context/ShopContext';
+import Toast from '../components/Toast';
 import {
   ShoppingBag,
   LayoutDashboard,
@@ -18,11 +20,13 @@ import {
   Clock,
   Mail,
   Ticket,
+  Percent,
   Image as ImageIcon
 } from 'lucide-react';
 
 export const AdminLayout = () => {
   const { user, logout } = useAuth();
+  const { toast, hideToast } = useShop();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -38,6 +42,7 @@ export const AdminLayout = () => {
     { label: 'Product Management', path: '/admin/products', icon: Package },
     { label: 'Inventory / Stock', path: '/admin/inventory', icon: Boxes },
     { label: 'Categories', path: '/admin/categories', icon: FolderTree },
+    { label: 'Category Offers', path: '/admin/category-offers', icon: Percent },
     { label: 'Orders', path: '/admin/orders', icon: ShoppingBag },
     { label: 'Coupons & Discounts', path: '/admin/coupons', icon: Ticket },
     { label: 'Banners & Hero', path: '/admin/banners', icon: ImageIcon },
@@ -114,7 +119,7 @@ export const AdminLayout = () => {
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1.5">
-            <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+            <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">
               Management
             </div>
             {navItems.map((item) => {
@@ -240,6 +245,7 @@ export const AdminLayout = () => {
           <Outlet />
         </main>
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
     </div>
   );
 };

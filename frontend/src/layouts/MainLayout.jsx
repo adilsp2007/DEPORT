@@ -6,7 +6,7 @@ import Toast from '../components/Toast';
 import { useShop } from '../context/ShopContext';
 
 export const MainLayout = () => {
-  const { toast } = useShop();
+  const { toast, hideToast } = useShop();
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F5F0] text-[#1E1B18] font-sans">
@@ -15,7 +15,7 @@ export const MainLayout = () => {
         <Outlet />
       </main>
       <Footer />
-      {toast && <Toast message={toast.message} type={toast.type} />}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
     </div>
   );
 };

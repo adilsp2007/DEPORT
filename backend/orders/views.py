@@ -5,6 +5,7 @@ import hmac
 import hashlib
 from django.conf import settings
 from rest_framework import status, permissions, viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,7 +22,9 @@ from .serializers import (
 from cart.models import Cart
 from addresses.models import Address
 from products.models import Product
+from categories.offer_service import get_effective_product_price
 from .services import cancel_order_and_restore_stock
+from .analytics_service import get_dashboard_analytics
 from .razorpay_service import RazorpayService, RazorpayConfigError
 import threading
 import logging
@@ -172,7 +175,8 @@ class CustomerCheckoutView(APIView):
                     subtotal = Decimal('0.00')
                     for item in cart_items:
                         product = locked_products[item.product_id]
-                        item_total = Decimal(str(product.price)) * Decimal(str(item.quantity))
+                        effective_pricing = get_effective_product_price(product)
+                        item_total = effective_pricing['selling_price'] * Decimal(str(item.quantity))
                         subtotal += item_total
 
                     shipping_cost = Decimal('0.00') if subtotal >= Decimal('300.00') else Decimal('25.00')
@@ -234,7 +238,8 @@ class CustomerCheckoutView(APIView):
                             elif img_obj.image_url:
                                 primary_img = img_obj.image_url
 
-                        unit_price = Decimal(str(product.price))
+                        effective_pricing = get_effective_product_price(product)
+                        unit_price = effective_pricing['selling_price']
                         item_total = unit_price * Decimal(str(item.quantity))
 
                         OrderItem.objects.create(
@@ -1174,3 +1179,48 @@ class PaymentWebhookView(APIView):
             )
 
         return Response({'status': 'webhook processed'}, status=status.HTTP_200_OK)
+
+
+class AdminDashboardAnalyticsView(APIView):
+    """
+    Comprehensive Admin Analytics API for DEPORT Store Operations:
+    - Provides real-time dynamic statistics, period-based comparisons,
+      continuous time-series charts (revenue and order status metrics),
+      sales performance, top-selling products, category breakdown,
+      and recent orders with search and filtering.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        period = request.query_params.get('period', 'this_month')
+        if period == 'month':
+            period = 'this_month'
+        elif period == 'year':
+            period = 'this_year'
+        elif period == 'week':
+            period = 'this_week'
+
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        grouping = request.query_params.get('grouping')
+        top_products_sort = request.query_params.get('top_products_sort', 'units_sold_desc')
+        order_search = request.query_params.get('order_search', '')
+        order_status = request.query_params.get('order_status', '')
+
+        try:
+            analytics_data = get_dashboard_analytics(
+                period=period,
+                start_date=start_date,
+                end_date=end_date,
+                grouping=grouping,
+                top_products_sort=top_products_sort,
+                order_search=order_search,
+                order_status=order_status
+            )
+            return Response(analytics_data, status=status.HTTP_200_OK)
+        except ValidationError as ve:
+            return Response(ve.detail if hasattr(ve, 'detail') else {'detail': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            logger.error(f"Error computing admin dashboard analytics: {exc}", exc_info=True)
+            return Response({'detail': 'Unable to calculate dashboard analytics.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

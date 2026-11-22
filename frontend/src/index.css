@@ -20,8 +20,31 @@
     font-family: 'Inter', sans-serif;
   }
 
-  h1, h2, h3, h4, .font-serif {
+  h1, h2, h3, h4, h5, h6, .font-serif {
     font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  /* Universal high-contrast placeholder styling across all browsers */
+  ::placeholder {
+    color: #9CA3AF !important;
+    opacity: 0.85 !important;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #9CA3AF !important;
+    opacity: 0.85 !important;
+  }
+
+  /* Native select dropdown options in dark luxury theme */
+  select option {
+    background-color: #161D19 !important;
+    color: #F3F4F6 !important;
+  }
+
+  /* Accessible focus indicators for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid #10B981;
+    outline-offset: 2px;
   }
 }
 

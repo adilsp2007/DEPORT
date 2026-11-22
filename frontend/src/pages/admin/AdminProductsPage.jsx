@@ -6,6 +6,7 @@ import ImageCropperModal from '../../components/ImageCropperModal';
 import PriceDisplay from '../../components/PriceDisplay';
 import AdminPagination from '../../components/admin/AdminPagination';
 import { formatINR } from '../../utils/currencyUtils';
+import { parseApiError } from '../../utils/errorHandler';
 import {
   Package,
   Search,
@@ -143,7 +144,7 @@ export const AdminProductsPage = () => {
       price: '',
       compare_at_price: '',
       discount_percentage: '',
-      category: categories[0]?.id || '',
+      category: '',
       sku: `DP-${Math.floor(1000 + Math.random() * 9000)}`,
       brand: 'DEPORT',
       stock_quantity: '10',
@@ -171,7 +172,7 @@ export const AdminProductsPage = () => {
       price: prod.price,
       compare_at_price: prod.compare_at_price || '',
       discount_percentage: discountPct,
-      category: prod.category?.id || '',
+      category: prod.category?.id || (typeof prod.category === 'number' ? prod.category : ''),
       sku: prod.sku || '',
       brand: prod.brand || 'DEPORT',
       stock_quantity: prod.stock_quantity ?? 0,
@@ -330,12 +331,46 @@ export const AdminProductsPage = () => {
     return null;
   };
 
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (field === 'category') {
+      if (!value) {
+        setFormErrors((prev) => ({ ...prev, category: 'Please select a category.' }));
+      } else {
+        setFormErrors((prev) => {
+          const copy = { ...prev };
+          delete copy.category;
+          delete copy.general;
+          return copy;
+        });
+      }
+      return;
+    }
+    if (formErrors[field] || formErrors.general) {
+      setFormErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[field];
+        delete copy.general;
+        return copy;
+      });
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormErrors({});
 
     const errs = {};
-    if (!formData.name.trim()) errs.name = 'Product name is required.';
+    const cleanedName = (formData.name || '').replace(/\s+/g, ' ').trim();
+    if (!cleanedName) errs.name = 'Product name is required.';
+
+    const cleanedSku = (formData.sku || '').trim().toUpperCase();
+    if (!cleanedSku) errs.sku = 'SKU is required.';
+
+    const selectedCategory = formData.category ? String(formData.category).trim() : '';
+    if (!selectedCategory) {
+      errs.category = 'Please select a category.';
+    }
 
     const numPrice = parseFloat(formData.price);
     const numCompare = formData.compare_at_price ? parseFloat(formData.compare_at_price) : null;
@@ -352,13 +387,28 @@ export const AdminProductsPage = () => {
       errs.price = 'Discounted price cannot exceed original price.';
     }
 
-    if (parseInt(formData.stock_quantity, 10) < 0) {
-      errs.stock_quantity = 'Stock cannot be negative.';
+    if (formData.stock_quantity === '' || isNaN(parseInt(formData.stock_quantity, 10)) || parseInt(formData.stock_quantity, 10) < 0) {
+      errs.stock_quantity = 'Stock quantity cannot be negative.';
     }
 
     // Minimum 3 images validation
     if (productImages.length < 3) {
       errs.images = `At least 3 images are required for every product (currently selected: ${productImages.length}).`;
+    }
+
+    // Client-side instant duplicate check
+    const currentId = editingProduct ? editingProduct.id : null;
+    if (cleanedName) {
+      const isDupName = products.some(
+        (p) => p.id !== currentId && p.name.replace(/\s+/g, ' ').trim().toLowerCase() === cleanedName.toLowerCase()
+      );
+      if (isDupName) errs.name = 'Product with this name already exists.';
+    }
+    if (cleanedSku) {
+      const isDupSku = products.some(
+        (p) => p.id !== currentId && p.sku.trim().toUpperCase() === cleanedSku
+      );
+      if (isDupSku) errs.sku = 'Product with this SKU already exists.';
     }
 
     if (Object.keys(errs).length > 0) {
@@ -369,25 +419,25 @@ export const AdminProductsPage = () => {
     setSubmitting(true);
     try {
       const payload = {
-        name: formData.name.trim(),
+        name: cleanedName,
         price: parseFloat(formData.price),
         compare_at_price: formData.compare_at_price ? parseFloat(formData.compare_at_price) : null,
         category: formData.category ? parseInt(formData.category, 10) : null,
-        sku: formData.sku.trim(),
-        brand: formData.brand.trim() || 'DEPORT',
+        sku: cleanedSku,
+        brand: (formData.brand || '').trim() || 'DEPORT',
         stock_quantity: parseInt(formData.stock_quantity, 10),
-        short_description: formData.short_description.trim(),
-        description: formData.description.trim() || formData.name.trim(),
+        short_description: (formData.short_description || '').trim(),
+        description: (formData.description || '').trim() || cleanedName,
         is_active: formData.is_active
       };
 
       let savedProduct;
       if (editingProduct) {
         savedProduct = await adminService.updateProduct(editingProduct.id, payload);
-        setSuccessMessage(`Product "${formData.name}" updated successfully.`);
+        setSuccessMessage(`Product "${cleanedName}" updated successfully.`);
       } else {
         savedProduct = await adminService.createProduct(payload);
-        setSuccessMessage(`Product "${formData.name}" created successfully.`);
+        setSuccessMessage(`Product "${cleanedName}" created successfully.`);
       }
 
       // Delete removed existing images
@@ -424,10 +474,11 @@ export const AdminProductsPage = () => {
       setIsModalOpen(false);
       fetchProducts();
     } catch (err) {
-      if (err.response && err.response.data) {
-        setFormErrors(err.response.data);
+      const parsed = parseApiError(err, 'Failed to save product.');
+      if (parsed.fieldErrors && Object.keys(parsed.fieldErrors).length > 0) {
+        setFormErrors(parsed.fieldErrors);
       } else {
-        setFormErrors({ general: 'Failed to save product.' });
+        setFormErrors({ general: parsed.message });
       }
     } finally {
       setSubmitting(false);
@@ -662,9 +713,9 @@ export const AdminProductsPage = () => {
               ) : products.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-gray-400 space-y-2">
-                    <Package size={32} className="mx-auto text-gray-600 mb-2" />
+                    <Package size={32} className="mx-auto text-gray-500 mb-2" />
                     <p className="font-serif text-lg text-[#F3F4F6]">No products found.</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-400">
                       {search ? 'Adjust or clear your search query.' : 'Add your first luxury bag product.'}
                     </p>
                     {search && (
@@ -713,6 +764,8 @@ export const AdminProductsPage = () => {
                         oldPrice={prod.compare_at_price || prod.original_price}
                         discountPercentage={prod.discount_percentage}
                         size="sm"
+                        priceClassName="text-white font-bold"
+                        oldPriceClassName="text-gray-400"
                       />
                     </td>
 
@@ -832,8 +885,8 @@ export const AdminProductsPage = () => {
                   name="name"
                   placeholder="e.g. Executive Leather Briefcase"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  error={formErrors.name?.[0] || formErrors.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  error={formErrors.name}
                   required
                 />
 
@@ -842,8 +895,8 @@ export const AdminProductsPage = () => {
                   name="sku"
                   placeholder="e.g. LX-1002"
                   value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                  error={formErrors.sku?.[0] || formErrors.sku}
+                  onChange={(e) => handleInputChange('sku', e.target.value)}
+                  error={formErrors.sku}
                   required
                 />
               </div>
@@ -857,7 +910,7 @@ export const AdminProductsPage = () => {
                   placeholder="e.g. 3499.00"
                   value={formData.compare_at_price}
                   onChange={(e) => handlePriceChange('compare_at_price', e.target.value)}
-                  error={formErrors.compare_at_price?.[0] || formErrors.compare_at_price}
+                  error={formErrors.compare_at_price}
                 />
 
                 <Input
@@ -868,7 +921,7 @@ export const AdminProductsPage = () => {
                   placeholder="e.g. 2499.00"
                   value={formData.price}
                   onChange={(e) => handlePriceChange('price', e.target.value)}
-                  error={formErrors.price?.[0] || formErrors.price}
+                  error={formErrors.price}
                   required
                 />
 
@@ -895,19 +948,25 @@ export const AdminProductsPage = () => {
                   name="stock_quantity"
                   placeholder="15"
                   value={formData.stock_quantity}
-                  onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
-                  error={formErrors.stock_quantity?.[0] || formErrors.stock_quantity}
+                  onChange={(e) => handleInputChange('stock_quantity', e.target.value)}
+                  error={formErrors.stock_quantity}
                   required
                 />
 
                 <div className="w-full flex flex-col gap-1.5">
-                  <label className="text-xs uppercase tracking-wider font-semibold text-[#E5E7EB]/90">
+                  <label htmlFor="product-category" className="text-xs uppercase tracking-wider font-semibold text-[#E5E7EB]/90">
                     Category <span className="text-[#10B981]">*</span>
                   </label>
                   <select
+                    id="product-category"
+                    name="category"
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full bg-[#161D19] text-[#F3F4F6] text-xs px-4 py-3 border border-[#10B981]/30 focus:border-[#10B981] focus:outline-none cursor-pointer"
+                    onChange={(e) => handleInputChange('category', e.target.value)}
+                    className={`w-full bg-[#161D19] text-[#F3F4F6] text-xs px-4 py-3 border transition-all duration-200 focus:outline-none cursor-pointer ${
+                      formErrors.category
+                        ? 'border-rose-500 focus:border-rose-500 focus:ring-1 focus:ring-rose-500'
+                        : 'border-[#10B981]/30 focus:border-[#10B981]'
+                    }`}
                   >
                     <option value="">Select Category</option>
                     {categories.map((c) => (
@@ -916,6 +975,12 @@ export const AdminProductsPage = () => {
                       </option>
                     ))}
                   </select>
+                  {formErrors.category && (
+                    <span className="text-xs text-rose-500 font-medium tracking-wide flex items-center gap-1">
+                      <AlertCircle size={12} className="shrink-0" />
+                      <span>{Array.isArray(formErrors.category) ? formErrors.category[0] : formErrors.category}</span>
+                    </span>
+                  )}
                 </div>
 
                 <Input
@@ -923,7 +988,8 @@ export const AdminProductsPage = () => {
                   name="brand"
                   placeholder="DEPORT"
                   value={formData.brand}
-                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                  onChange={(e) => handleInputChange('brand', e.target.value)}
+                  error={formErrors.brand}
                 />
               </div>
 
@@ -935,9 +1001,18 @@ export const AdminProductsPage = () => {
                   type="text"
                   placeholder="Single line summary of the luxury bag..."
                   value={formData.short_description}
-                  onChange={(e) => setFormData({ ...formData, short_description: e.target.value })}
-                  className="w-full bg-[#161D19] text-[#F3F4F6] text-xs p-3 border border-[#10B981]/30 focus:border-[#10B981] focus:outline-none placeholder-[#9CA3AF]/50"
+                  onChange={(e) => handleInputChange('short_description', e.target.value)}
+                  className={`w-full bg-[#161D19] text-[#F3F4F6] text-xs p-3 border transition-all duration-200 focus:outline-none placeholder-[#9CA3AF]/50 ${
+                    formErrors.short_description
+                      ? 'border-rose-500 focus:border-rose-500 focus:ring-1 focus:ring-rose-500'
+                      : 'border-[#10B981]/30 focus:border-[#10B981]'
+                  }`}
                 />
+                {formErrors.short_description && (
+                  <span className="text-xs text-rose-400 font-medium tracking-wide">
+                    {Array.isArray(formErrors.short_description) ? formErrors.short_description[0] : formErrors.short_description}
+                  </span>
+                )}
               </div>
 
               <div className="w-full flex flex-col gap-1.5">
@@ -948,9 +1023,18 @@ export const AdminProductsPage = () => {
                   rows={3}
                   placeholder="Detailed craftsmanship, materials, dimensions, and features..."
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full bg-[#161D19] text-[#F3F4F6] text-xs p-3 border border-[#10B981]/30 focus:border-[#10B981] focus:outline-none placeholder-[#9CA3AF]/50"
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  className={`w-full bg-[#161D19] text-[#F3F4F6] text-xs p-3 border transition-all duration-200 focus:outline-none placeholder-[#9CA3AF]/50 ${
+                    formErrors.description
+                      ? 'border-rose-500 focus:border-rose-500 focus:ring-1 focus:ring-rose-500'
+                      : 'border-[#10B981]/30 focus:border-[#10B981]'
+                  }`}
                 />
+                {formErrors.description && (
+                  <span className="text-xs text-rose-400 font-medium tracking-wide">
+                    {Array.isArray(formErrors.description) ? formErrors.description[0] : formErrors.description}
+                  </span>
+                )}
               </div>
 
               {/* Multiple Images Upload & Cropping Section (Minimum 3 images) */}

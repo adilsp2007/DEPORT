@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'cart',
     'wishlist',
     'orders',
+    'wallet',
 ]
 
 MIDDLEWARE = [
@@ -164,7 +165,7 @@ AWS_SES_CONFIGURATION_SET = os.getenv('AWS_SES_CONFIGURATION_SET', '').strip()
 
 # OTP Configuration
 OTP_EXPIRY_MINUTES = int(os.getenv('OTP_EXPIRY_MINUTES', 5))
-OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv('OTP_RESEND_COOLDOWN_SECONDS', 60))
+OTP_RESEND_COOLDOWN_SECONDS = int(os.getenv('OTP_RESEND_COOLDOWN_SECONDS', 30))
 MAX_OTP_ATTEMPTS = int(os.getenv('MAX_OTP_ATTEMPTS', 5))
 
 # Google OAuth Settings
@@ -198,6 +199,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.AllowAny',
     ),
+    'EXCEPTION_HANDLER': 'config.exceptions.custom_exception_handler',
 }
 
 access_minutes = int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', 15))

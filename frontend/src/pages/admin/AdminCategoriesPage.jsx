@@ -3,6 +3,7 @@ import adminService from '../../services/adminService';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import AdminPagination from '../../components/admin/AdminPagination';
+import { parseApiError } from '../../utils/errorHandler';
 import {
   FolderTree,
   Search,
@@ -137,14 +138,33 @@ export const AdminCategoriesPage = () => {
     setIsModalOpen(true);
   };
 
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (formErrors[field] || formErrors.general) {
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        delete next.general;
+        return next;
+      });
+    }
+  };
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        setFormErrors({ image: 'Image file size cannot exceed 5 MB.' });
+        setFormErrors((prev) => ({ ...prev, image: 'Image file size cannot exceed 5 MB.' }));
         return;
       }
       setImageFile(file);
+      if (formErrors.image) {
+        setFormErrors((prev) => {
+          const next = { ...prev };
+          delete next.image;
+          return next;
+        });
+      }
       const reader = new FileReader();
       reader.onloadend = () => setImagePreview(reader.result);
       reader.readAsDataURL(file);
@@ -153,8 +173,10 @@ export const AdminCategoriesPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormErrors({});
+
     // Clean whitespace: collapse multiple internal spaces and strip
-    const cleanedName = formData.name.replace(/\s+/g, ' ').trim();
+    const cleanedName = (formData.name || '').replace(/\s+/g, ' ').trim();
     if (!cleanedName) {
       setFormErrors({ name: 'Category name is required.' });
       return;
@@ -168,7 +190,7 @@ export const AdminCategoriesPage = () => {
     });
 
     if (isDuplicate) {
-      setFormErrors({ name: 'Category already exists.' });
+      setFormErrors({ name: 'Category with this name already exists.' });
       return;
     }
 
@@ -176,7 +198,7 @@ export const AdminCategoriesPage = () => {
     try {
       const payload = new FormData();
       payload.append('name', cleanedName);
-      payload.append('description', formData.description.trim());
+      payload.append('description', (formData.description || '').trim());
       payload.append('is_active', formData.is_active ? 'true' : 'false');
 
       if (imageFile) {
@@ -185,23 +207,20 @@ export const AdminCategoriesPage = () => {
 
       if (editingCategory) {
         await adminService.updateCategory(editingCategory.id, payload);
-        setSuccessMessage(`Category "${formData.name}" updated successfully.`);
+        setSuccessMessage(`Category "${cleanedName}" updated successfully.`);
       } else {
         await adminService.createCategory(payload);
-        setSuccessMessage(`Category "${formData.name}" created successfully.`);
+        setSuccessMessage(`Category "${cleanedName}" created successfully.`);
       }
 
       setIsModalOpen(false);
       fetchCategories();
     } catch (err) {
-      if (err.response && err.response.data) {
-        if (typeof err.response.data === 'object') {
-          setFormErrors(err.response.data);
-        } else {
-          setFormErrors({ general: 'Failed to save category.' });
-        }
+      const parsed = parseApiError(err, 'Failed to save category.');
+      if (parsed.fieldErrors && Object.keys(parsed.fieldErrors).length > 0) {
+        setFormErrors(parsed.fieldErrors);
       } else {
-        setFormErrors({ general: 'Network error. Please try again.' });
+        setFormErrors({ general: parsed.message });
       }
     } finally {
       setSubmitting(false);
@@ -425,9 +444,9 @@ export const AdminCategoriesPage = () => {
               ) : categories.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-gray-400 space-y-2">
-                    <FolderTree size={32} className="mx-auto text-gray-600 mb-2" />
+                    <FolderTree size={32} className="mx-auto text-gray-500 mb-2" />
                     <p className="font-serif text-lg text-[#F3F4F6]">No categories found.</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-400">
                       {search ? 'Try clearing your search query.' : 'Create your first category.'}
                     </p>
                     {search && (
@@ -584,8 +603,8 @@ export const AdminCategoriesPage = () => {
                 name="name"
                 placeholder="e.g. Leather Backpacks"
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                error={formErrors.name?.[0] || formErrors.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                error={formErrors.name}
                 required
               />
 
@@ -597,7 +616,7 @@ export const AdminCategoriesPage = () => {
                   rows={3}
                   placeholder="Short overview of bags in this category..."
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
                   className="w-full bg-[#161D19] text-[#F3F4F6] text-xs p-3 border border-[#10B981]/30 focus:border-[#10B981] focus:outline-none placeholder-[#9CA3AF]/50"
                 />
               </div>
@@ -611,7 +630,7 @@ export const AdminCategoriesPage = () => {
                   {imagePreview ? (
                     <img src={imagePreview} alt="Preview" className="w-14 h-14 rounded object-cover border border-[#10B981]" />
                   ) : (
-                    <div className="w-14 h-14 rounded bg-[#161D19] border border-[#1E2922] text-gray-500 flex items-center justify-center">
+                    <div className="w-14 h-14 rounded bg-[#161D19] border border-[#1E2922] text-gray-400 flex items-center justify-center">
                       <ImageIcon size={24} />
                     </div>
                   )}

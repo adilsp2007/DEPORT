@@ -6,6 +6,8 @@ import { useShop } from '../context/ShopContext';
 import AccountSidebar from '../components/AccountSidebar';
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
+import ErrorState from '../components/ErrorState';
+import { parseApiError } from '../utils/errorHandler';
 import { formatINR } from '../utils/currencyUtils';
 import {
   Package,
@@ -38,6 +40,8 @@ export const OrdersPage = () => {
   const {
     data: ordersData,
     isLoading: loading,
+    isError,
+    error,
     refetch: fetchOrders
   } = useQuery({
     queryKey: ['customer-orders', { page, search, status: statusFilter }],
@@ -238,8 +242,18 @@ export const OrdersPage = () => {
             </div>
           )}
 
+          {/* Error State with Retry Button */}
+          {isError && !loading && (
+            <ErrorState
+              title="Unable to Load Orders"
+              message={parseApiError(error, 'Failed to load your orders. Please check your connection.').message}
+              onRetry={() => fetchOrders()}
+              retryLabel="Retry Loading Orders"
+            />
+          )}
+
           {/* Empty State */}
-          {!loading && orders.length === 0 && (
+          {!loading && !isError && orders.length === 0 && (
             <EmptyState
               icon={Package}
               title="No Orders Found"
@@ -262,7 +276,7 @@ export const OrdersPage = () => {
           )}
 
           {/* Orders Cards List */}
-          {!loading && orders.length > 0 && (
+          {!loading && !isError && orders.length > 0 && (
             <div className="space-y-6">
               {orders.map((order) => {
                 const isCancellable = ['pending', 'confirmed', 'processing'].includes(order.status);

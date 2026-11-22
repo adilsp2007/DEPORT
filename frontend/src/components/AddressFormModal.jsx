@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Input from './Input';
 import Button from './Button';
+import { parseApiError } from '../utils/errorHandler';
 
 const DEFAULT_FORM_DATA = {
   label: 'Home',
@@ -71,8 +72,12 @@ export const AddressFormModal = ({
     }
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required.';
-    } else if (!/^[+\d\s-]{7,20}$/.test(formData.phone.trim())) {
-      newErrors.phone = 'Please enter a valid phone number.';
+    } else {
+      const cleanPhone = formData.phone.trim();
+      const digits = cleanPhone.replace(/\D/g, '');
+      if (!/^\+?[0-9\s\-()]{7,25}$/.test(cleanPhone) || digits.length < 7 || digits.length > 15 || new Set(digits).size <= 1) {
+        newErrors.phone = 'Please enter a valid delivery contact number.';
+      }
     }
     if (!formData.address_line_1.trim()) {
       newErrors.address_line_1 = 'Address line 1 is required.';
@@ -102,7 +107,10 @@ export const AddressFormModal = ({
       await onSave(formData);
       onClose();
     } catch (err) {
-      // Backend error will be handled or displayed via toast by caller
+      const parsed = parseApiError(err, 'Failed to save address. Please check the entered information.');
+      if (parsed.fieldErrors && Object.keys(parsed.fieldErrors).length > 0) {
+        setErrors(parsed.fieldErrors);
+      }
     }
   };
 

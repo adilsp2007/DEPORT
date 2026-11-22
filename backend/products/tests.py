@@ -236,3 +236,197 @@ class ProductAndCategoryAPITests(APITestCase):
         self.prod1.refresh_from_db()
         self.assertFalse(self.prod1.is_deleted)
         self.assertTrue(self.prod1.is_active)
+
+    def test_product_duplicate_name_rejected(self):
+        self.client.force_authenticate(user=self.admin_user)
+        # 1. Duplicate name lowercase
+        resp = self.client.post('/api/admin/products/', {
+            'name': 'aurelia leather tote',
+            'price': '199.00',
+            'sku': 'NEW-SKU-999',
+            'stock_quantity': 5,
+            'category': self.cat_handbags.id
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Product with this name already exists.', str(resp.data))
+
+        # 2. Duplicate name with extra whitespace
+        resp2 = self.client.post('/api/admin/products/', {
+            'name': '  AURELIA   LEATHER   TOTE  ',
+            'price': '199.00',
+            'sku': 'NEW-SKU-888',
+            'stock_quantity': 5,
+            'category': self.cat_handbags.id
+        })
+        self.assertEqual(resp2.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Product with this name already exists.', str(resp2.data))
+
+    def test_product_duplicate_sku_rejected(self):
+        self.client.force_authenticate(user=self.admin_user)
+        resp = self.client.post('/api/admin/products/', {
+            'name': 'Brand New Tote Bag',
+            'price': '199.00',
+            'sku': 'dep-test-001', # Same as prod1.sku
+            'stock_quantity': 5,
+            'category': self.cat_handbags.id
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Product with this SKU already exists.', str(resp.data))
+
+    def test_product_edit_keeps_own_name_and_sku(self):
+        self.client.force_authenticate(user=self.admin_user)
+        # Updating self with same name and SKU succeeds
+        resp = self.client.patch(f'/api/admin/products/{self.prod1.id}/', {
+            'name': '  Aurelia Leather Tote  ',
+            'sku': 'DEP-TEST-001'
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        # Updating to another existing product's name fails
+        resp_conflict = self.client.patch(f'/api/admin/products/{self.prod1.id}/', {
+            'name': 'verona wallet' # prod2's name
+        })
+        self.assertEqual(resp_conflict.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Product with this name already exists.', str(resp_conflict.data))
+
+    def test_product_category_required_validation(self):
+        self.client.force_authenticate(user=self.admin_user)
+
+        # 1. Create a product without category field (omitted) - must fail
+        resp_omitted = self.client.post('/api/admin/products/', {
+            'name': 'Category Missing Bag',
+            'price': '120.00',
+            'sku': 'CAT-REQ-001',
+            'stock_quantity': 5
+        })
+        self.assertEqual(resp_omitted.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('category', resp_omitted.data)
+        self.assertIn('Please select a category.', str(resp_omitted.data['category']))
+
+        # 2. Send category as null (JSON payload) - must fail
+        resp_null = self.client.post('/api/admin/products/', {
+            'name': 'Category Null Bag',
+            'price': '120.00',
+            'sku': 'CAT-REQ-002',
+            'stock_quantity': 5,
+            'category': None
+        }, format='json')
+        self.assertEqual(resp_null.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('category', resp_null.data)
+        self.assertIn('Please select a category.', str(resp_null.data['category']))
+
+        # 3. Send category as empty string - must fail
+        resp_empty = self.client.post('/api/admin/products/', {
+            'name': 'Category Empty Bag',
+            'price': '120.00',
+            'sku': 'CAT-REQ-003',
+            'stock_quantity': 5,
+            'category': ''
+        })
+        self.assertEqual(resp_empty.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('category', resp_empty.data)
+        self.assertIn('Please select a category.', str(resp_empty.data['category']))
+
+        # 4. Send invalid category ID - must fail
+        resp_invalid = self.client.post('/api/admin/products/', {
+            'name': 'Category Invalid Bag',
+            'price': '120.00',
+            'sku': 'CAT-REQ-004',
+            'stock_quantity': 5,
+            'category': 999999
+        })
+        self.assertEqual(resp_invalid.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('category', resp_invalid.data)
+
+        # 5. Create a product with a valid category - must succeed
+        resp_valid = self.client.post('/api/admin/products/', {
+            'name': 'Category Valid Luxury Bag',
+            'description': 'A luxury handcrafted leather bag.',
+            'price': '299.00',
+            'sku': 'CAT-REQ-005',
+            'stock_quantity': 8,
+            'category': self.cat_handbags.id
+        })
+        self.assertEqual(resp_valid.status_code, status.HTTP_201_CREATED)
+        created_prod_id = resp_valid.data['id']
+        self.assertEqual(resp_valid.data['category']['id'], self.cat_handbags.id)
+
+        # 6. Edit product without removing existing category (partial PATCH) - must succeed
+        resp_edit_keep = self.client.patch(f'/api/admin/products/{created_prod_id}/', {
+            'name': 'Category Valid Luxury Bag Updated'
+        })
+        self.assertEqual(resp_edit_keep.status_code, status.HTTP_200_OK)
+        # Category in ProductAdminSerializer response is category ID
+        self.assertEqual(resp_edit_keep.data['category'], self.cat_handbags.id)
+
+        # 7. Update product with another valid category - must succeed
+        new_cat = Category.objects.create(name='Duffel Bags', slug='duffel-bags', is_active=True)
+        resp_edit_cat = self.client.patch(f'/api/admin/products/{created_prod_id}/', {
+            'category': new_cat.id
+        })
+        self.assertEqual(resp_edit_cat.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp_edit_cat.data['category'], new_cat.id)
+
+        # 8. Edit product and send category as null or empty - must fail
+        resp_edit_null = self.client.patch(f'/api/admin/products/{created_prod_id}/', {
+            'category': None
+        }, format='json')
+        self.assertEqual(resp_edit_null.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Please select a category.', str(resp_edit_null.data.get('category')))
+
+    def test_product_serializer_direct_category_validation(self):
+        from products.serializers import ProductSerializer
+
+        # 1. Missing category in ProductSerializer
+        s1 = ProductSerializer(data={
+            'name': 'Test Direct Bag',
+            'sku': 'DIR-TEST-001',
+            'price': '150.00',
+            'description': 'Description'
+        })
+        self.assertFalse(s1.is_valid())
+        self.assertIn('category', s1.errors)
+        self.assertEqual(s1.errors['category'], ['Please select a category.'])
+
+        # 2. Null category
+        s2 = ProductSerializer(data={
+            'name': 'Test Direct Bag',
+            'sku': 'DIR-TEST-002',
+            'price': '150.00',
+            'description': 'Description',
+            'category': None
+        })
+        self.assertFalse(s2.is_valid())
+        self.assertEqual(s2.errors['category'], ['Please select a category.'])
+
+        # 3. Empty string category
+        s3 = ProductSerializer(data={
+            'name': 'Test Direct Bag',
+            'sku': 'DIR-TEST-003',
+            'price': '150.00',
+            'description': 'Description',
+            'category': ''
+        })
+        self.assertFalse(s3.is_valid())
+        self.assertEqual(s3.errors['category'], ['Please select a category.'])
+
+        # 4. Invalid category ID
+        s4 = ProductSerializer(data={
+            'name': 'Test Direct Bag',
+            'sku': 'DIR-TEST-004',
+            'price': '150.00',
+            'description': 'Description',
+            'category': 999999
+        })
+        self.assertFalse(s4.is_valid())
+        self.assertIn('category', s4.errors)
+
+        # 5. Valid category
+        s5 = ProductSerializer(data={
+            'name': 'Test Direct Bag Valid',
+            'sku': 'DIR-TEST-005',
+            'price': '150.00',
+            'description': 'Description',
+            'category': self.cat_handbags.id
+        })
+        self.assertTrue(s5.is_valid())

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
 import { ShoppingBag, Lock, Mail, Eye, EyeOff, ShieldCheck, AlertCircle, RotateCcw } from 'lucide-react';
+import { parseApiError } from '../../utils/errorHandler';
 
 export const AdminLoginPage = () => {
   const navigate = useNavigate();
@@ -66,21 +67,10 @@ export const AdminLoginPage = () => {
       });
       navigate('/admin/dashboard', { replace: true });
     } catch (err) {
-      if (err.response) {
-        const status = err.response.status;
-        const data = err.response.data;
-
-        if (status === 403) {
-          setGeneralError(data.detail || 'Access denied. You do not have administrator permissions.');
-        } else if (status === 401) {
-          setGeneralError(data.detail || 'Invalid email or password.');
-        } else if (data.detail) {
-          setGeneralError(data.detail);
-        } else {
-          setErrors(data);
-        }
-      } else {
-        setGeneralError('Network error. Unable to reach the server. Please check your connection.');
+      const parsed = parseApiError(err, 'Invalid email or password. Please try again.');
+      setGeneralError(parsed.message);
+      if (parsed.fieldErrors && Object.keys(parsed.fieldErrors).length > 0) {
+        setErrors(parsed.fieldErrors);
       }
     } finally {
       setLoading(false);
@@ -261,7 +251,7 @@ export const AdminLoginPage = () => {
           </form>
 
           {/* Footer note */}
-          <div className="mt-8 pt-6 border-t border-[#1E2922] text-center text-xs text-gray-500 font-light">
+          <div className="mt-8 pt-6 border-t border-[#1E2922] text-center text-xs text-gray-400 font-light">
             Need customer shopping support?{' '}
             <a href="/" className="text-[#10B981] hover:underline font-medium">
               Return to DEPORT Store
@@ -271,7 +261,7 @@ export const AdminLoginPage = () => {
       </main>
 
       {/* Page Footer */}
-      <footer className="relative z-10 py-4 text-center text-xs text-gray-500 border-t border-[#1E2922]/60">
+      <footer className="relative z-10 py-4 text-center text-xs text-gray-400 border-t border-[#1E2922]/60">
         &copy; {new Date().getFullYear()} DEPORT Luxury Bags. All rights reserved. Admin System.
       </footer>
     </div>

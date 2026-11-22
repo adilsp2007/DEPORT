@@ -3,6 +3,13 @@ from .models import Order, OrderItem, Coupon, CouponUsage, Payment
 
 
 class CouponSerializer(serializers.ModelSerializer):
+    code = serializers.CharField(
+        max_length=50,
+        error_messages={
+            'blank': 'Coupon code cannot be empty.',
+            'required': 'Coupon code is required.'
+        }
+    )
     min_purchase_amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, write_only=True)
     end_date = serializers.DateTimeField(required=False, write_only=True, allow_null=True)
     user_limit = serializers.IntegerField(required=False, write_only=True)
@@ -37,9 +44,17 @@ class CouponSerializer(serializers.ModelSerializer):
         return ret
 
     def validate_code(self, value):
+        if not value:
+            raise serializers.ValidationError('Coupon code is required.')
         val = value.strip().upper()
         if not val:
             raise serializers.ValidationError('Coupon code cannot be empty.')
+        
+        qs = Coupon.objects.filter(code__iexact=val)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError('Coupon with this code already exists.')
         return val
 
     def validate_discount_value(self, value):
@@ -131,7 +146,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'order_number', 'user', 'user_email', 'user_name',
             'status', 'status_display', 'payment_method', 'coupon', 'coupon_code',
-            'subtotal', 'tax', 'shipping_cost', 'discount', 'total',
+            'subtotal', 'tax', 'shipping_cost', 'discount', 'wallet_amount_applied', 'total',
             'currency', 'currency_symbol',
             'shipping_full_name', 'shipping_phone', 'shipping_address_line_1',
             'shipping_address_line_2', 'shipping_city', 'shipping_state',

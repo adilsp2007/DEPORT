@@ -740,11 +740,11 @@ class InventoryStockManagementTestCase(TransactionTestCase):
 
         # Simulate unexpected DB error during payment record creation
         with patch('orders.models.Payment.objects.create', side_effect=RuntimeError('Database simulated failure')):
-            with self.assertRaises(RuntimeError):
-                self.client.post('/api/orders/checkout/', {
-                    'address_id': self.address1.id,
-                    'payment_method': 'Cash on Delivery'
-                }, format='json')
+            res = self.client.post('/api/orders/checkout/', {
+                'address_id': self.address1.id,
+                'payment_method': 'Cash on Delivery'
+            }, format='json')
+            self.assertEqual(res.status_code, 500)
 
         # Stock must be completely unchanged due to transaction rollback
         self.product_a.refresh_from_db()
@@ -1680,6 +1680,68 @@ class CouponManagementTestCase(TransactionTestCase):
         self.assertEqual(Decimal(str(order_b['shipping_cost'])), Decimal('25.00'))
         self.assertEqual(Decimal(str(order_b['tax'])), Decimal('5.00'))
         self.assertEqual(Decimal(str(order_b['total'])), Decimal('110.00'))
+
+    def test_15_duplicate_coupon_code_validation(self):
+        """15. Duplicate coupon code validation (create and update, case-insensitive)."""
+        self.client.force_authenticate(user=self.admin)
+
+        # 1. Create initial coupon
+        res1 = self.client.post('/api/admin/coupons/', {
+            'code': 'SUMMER50',
+            'discount_type': 'percentage',
+            'discount_value': '50.00'
+        }, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED)
+        coupon_id = res1.data['id']
+
+        # 2. Try creating duplicate with lowercase code
+        res_dup_lower = self.client.post('/api/admin/coupons/', {
+            'code': 'summer50',
+            'discount_type': 'fixed',
+            'discount_value': '20.00'
+        }, format='json')
+        self.assertEqual(res_dup_lower.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Coupon with this code already exists.', str(res_dup_lower.data))
+
+        # 3. Try creating duplicate with surrounding whitespace
+        res_dup_ws = self.client.post('/api/admin/coupons/', {
+            'code': '  SUMMER50  ',
+            'discount_type': 'fixed',
+            'discount_value': '30.00'
+        }, format='json')
+        self.assertEqual(res_dup_ws.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Coupon with this code already exists.', str(res_dup_ws.data))
+
+        # 4. Try creating with empty code
+        res_empty = self.client.post('/api/admin/coupons/', {
+            'code': '   ',
+            'discount_type': 'fixed',
+            'discount_value': '30.00'
+        }, format='json')
+        self.assertEqual(res_empty.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue('code' in res_empty.data)
+
+        # 5. Edit self without changing code succeeds
+        res_edit_self = self.client.patch(f'/api/admin/coupons/{coupon_id}/', {
+            'code': 'SUMMER50',
+            'discount_value': '55.00'
+        }, format='json')
+        self.assertEqual(res_edit_self.status_code, status.HTTP_200_OK)
+
+        # 6. Create another coupon and try to rename to SUMMER50
+        res_c2 = self.client.post('/api/admin/coupons/', {
+            'code': 'WINTER20',
+            'discount_type': 'fixed',
+            'discount_value': '20.00'
+        }, format='json')
+        self.assertEqual(res_c2.status_code, status.HTTP_201_CREATED)
+        c2_id = res_c2.data['id']
+
+        res_edit_conflict = self.client.patch(f'/api/admin/coupons/{c2_id}/', {
+            'code': 'summer50'
+        }, format='json')
+        self.assertEqual(res_edit_conflict.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Coupon with this code already exists.', str(res_edit_conflict.data))
 
 
 class RazorpayPaymentIntegrationTestCase(TestCase):

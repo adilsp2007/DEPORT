@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import adminService from '../../services/adminService';
 import Button from '../../components/Button';
 import AdminPagination from '../../components/admin/AdminPagination';
+import { parseApiError } from '../../utils/errorHandler';
 import {
   ShoppingBag,
   Search,
@@ -78,11 +79,8 @@ export const AdminOrdersPage = () => {
       setTotalOrders(data.count || 0);
       setTotalPages(data.total_pages || Math.ceil((data.count || 0) / pageSize) || 1);
     } catch (err) {
-      if (err.response?.data?.detail) {
-        setError(err.response.data.detail);
-      } else {
-        setError('Failed to load store orders.');
-      }
+      const parsed = parseApiError(err, 'Failed to load store orders.');
+      setError(parsed.message);
     } finally {
       setLoading(false);
     }
@@ -123,11 +121,8 @@ export const AdminOrdersPage = () => {
       queryClient.invalidateQueries({ queryKey: ['product'] });
       fetchOrders();
     } catch (err) {
-      if (err.response?.data?.detail) {
-        setError(err.response.data.detail);
-      } else {
-        setError('Failed to update order status.');
-      }
+      const parsed = parseApiError(err, 'Failed to update order status.');
+      setError(parsed.message);
     } finally {
       setUpdatingStatus(false);
     }
@@ -355,9 +350,9 @@ export const AdminOrdersPage = () => {
               ) : orders.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-gray-400 space-y-2">
-                    <ShoppingBag size={32} className="mx-auto text-gray-600 mb-2" />
+                    <ShoppingBag size={32} className="mx-auto text-gray-500 mb-2" />
                     <p className="font-serif text-lg text-[#F3F4F6]">No store orders found.</p>
-                    <p className="text-xs text-gray-500">Orders submitted by customers will appear here in descending order.</p>
+                    <p className="text-xs text-gray-400">Orders submitted by customers will appear here in descending order.</p>
                   </td>
                 </tr>
               ) : (
@@ -382,7 +377,7 @@ export const AdminOrdersPage = () => {
                         {o.user_email || 'No email provided'}
                       </p>
                       {o.shipping_phone && (
-                        <p className="text-[10px] text-gray-500 font-mono">
+                        <p className="text-[10px] text-gray-400 font-mono">
                           Ph: {o.shipping_phone}
                         </p>
                       )}

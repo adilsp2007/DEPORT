@@ -131,7 +131,7 @@ export const HomePage = () => {
           <h2 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal text-white mb-6 leading-tight">
             {promoTitle}
           </h2>
-          <p className="text-[#9CA3AF] text-base sm:text-lg max-w-2xl mx-auto font-light leading-relaxed mb-8">
+          <p className="text-gray-300 text-base sm:text-lg max-w-2xl mx-auto font-light leading-relaxed mb-8">
             {promoSubtitle}
           </p>
           <div className="flex justify-center gap-4">
@@ -223,10 +223,10 @@ export const HomePage = () => {
               <h2 className="font-serif text-3xl sm:text-4xl text-white font-normal mb-6">
                 Crafted for Generations, Designed for Today
               </h2>
-              <p className="text-[#9CA3AF] text-base leading-relaxed mb-6 font-light">
+              <p className="text-gray-300 text-base leading-relaxed mb-6 font-light">
                 At DEPORT, every bag begins with hand-selected full-grain hides from certified European tanneries. Our master artisans blend old-world leathercraft with minimalist modern engineering.
               </p>
-              <p className="text-[#9CA3AF] text-base leading-relaxed mb-8 font-light">
+              <p className="text-gray-300 text-base leading-relaxed mb-8 font-light">
                 We believe true luxury is understated, enduring, and functional. Carrying your style is an expression of individuality and timeless taste.
               </p>
               
@@ -254,7 +254,7 @@ export const HomePage = () => {
           <h2 className="font-serif text-3xl sm:text-4xl text-white mb-4">
             Stay Connected
           </h2>
-          <p className="text-[#9CA3AF] text-sm max-w-md mx-auto mb-8 font-light leading-relaxed">
+          <p className="text-gray-300 text-sm max-w-md mx-auto mb-8 font-light leading-relaxed">
             Be the first to receive updates on new arrivals, secret seasonal sales, and private atelier workshops.
           </p>
 
@@ -265,7 +265,7 @@ export const HomePage = () => {
               onChange={(e) => setNewsletterEmail(e.target.value)}
               placeholder="Enter your email address"
               required
-              className="flex-1 bg-[#0B0F0D] text-white text-sm px-4 py-3 border border-[#10B981]/30 focus:border-[#10B981] focus:outline-none"
+              className="flex-1 bg-[#0B0F0D] text-white text-sm px-4 py-3 border border-[#10B981]/30 focus:border-[#10B981] focus:outline-none placeholder-gray-400 placeholder:opacity-85"
             />
             <Button type="submit" variant="primary">
               Subscribe

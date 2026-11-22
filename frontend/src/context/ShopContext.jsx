@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import cartService from '../services/cartService';
 import addressService from '../services/addressService';
 import authService from '../services/authService';
 import orderService from '../services/orderService';
+import { parseApiError } from '../utils/errorHandler';
 
 const getAuthToken = () => {
   return localStorage.getItem('deport_access_token') || localStorage.getItem('luxora_access_token');
@@ -53,10 +54,34 @@ export const ShopProvider = ({ children }) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const lastToastRef = useRef({ message: '', time: 0 });
+
+  const hideToast = useCallback(() => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToast(null);
+  }, []);
 
   const showToast = useCallback((message, type = 'success') => {
+    if (!message) return;
+    const now = Date.now();
+    // Prevent duplicate notification spam within 2 seconds
+    if (lastToastRef.current.message === message && (now - lastToastRef.current.time) < 2000) {
+      return;
+    }
+    lastToastRef.current = { message, time: now };
+
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 4000);
   }, []);
 
   // Fetch Cart from backend if user is authenticated
@@ -385,10 +410,10 @@ export const ShopProvider = ({ children }) => {
         setAppliedCoupon(res);
         return { success: true, data: res };
       }
-      return { success: false, detail: res.detail || 'Coupon is not valid.' };
+      return { success: false, detail: res.detail || 'This coupon is invalid or expired.' };
     } catch (err) {
-      const detail = err.response?.data?.detail || err.response?.data?.error || 'Invalid or expired promo code.';
-      return { success: false, detail };
+      const parsed = parseApiError(err, 'This coupon is invalid or expired.');
+      return { success: false, detail: parsed.message };
     }
   };
 
@@ -535,6 +560,7 @@ export const ShopProvider = ({ children }) => {
         setIsFilterDrawerOpen,
         toast,
         showToast,
+        hideToast,
         addAddress,
         deleteAddress,
         setDefaultAddress

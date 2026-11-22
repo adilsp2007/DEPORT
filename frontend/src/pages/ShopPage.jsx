@@ -161,7 +161,7 @@ export const ShopPage = () => {
             placeholder="Search catalog..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="w-full bg-[#131915] text-[#F3F4F6] text-xs px-4 py-2.5 pl-10 pr-20 border border-[#1E2922] focus:outline-none focus:border-[#10B981] placeholder-gray-500"
+            className="w-full bg-[#131915] text-[#F3F4F6] text-xs px-4 py-2.5 pl-10 pr-20 border border-[#1E2922] focus:outline-none focus:border-[#10B981] placeholder-gray-400 placeholder:opacity-85"
           />
           {localSearch && (
             <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">

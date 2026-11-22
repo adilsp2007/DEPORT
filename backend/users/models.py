@@ -11,9 +11,26 @@ class UserManager(BaseUserManager):
     """Custom user manager where email is the unique identifier for authentication."""
 
     def create_user(self, email, password=None, **extra_fields):
-        if not email:
-            raise ValueError('The Email field must be provided')
-        email = self.normalize_email(email)
+        if not email or not isinstance(email, str) or not email.strip():
+            raise ValueError('The Email field must be provided and cannot be blank.')
+        email = self.normalize_email(email.strip().lower())
+
+        # Strict email validation at model manager level
+        from django.core.validators import validate_email as django_validate_email
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            django_validate_email(email)
+        except DjangoValidationError:
+            raise ValueError(f"Enter a valid email address: '{email}'")
+
+        parts = email.split('@')
+        if len(parts) != 2 or '.' not in parts[1] or parts[1].startswith('.') or parts[1].endswith('.'):
+            raise ValueError(f"Enter a valid email address with a valid domain: '{email}'")
+
+        domain_parts = parts[1].split('.')
+        if any(not p for p in domain_parts) or len(domain_parts[-1]) < 2:
+            raise ValueError(f"Enter a valid email address with a valid top-level domain: '{email}'")
+
         user = self.model(email=email, **extra_fields)
         if password:
             user.set_password(password)
@@ -75,6 +92,20 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['first_name', 'last_name']
+
+    def clean(self):
+        super().clean()
+        if self.email:
+            self.email = self.email.strip().lower()
+            from django.core.validators import validate_email as django_validate_email
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            django_validate_email(self.email)
+            parts = self.email.split('@')
+            if len(parts) != 2 or '.' not in parts[1] or parts[1].startswith('.') or parts[1].endswith('.'):
+                raise DjangoValidationError({'email': 'Enter a valid email address with a valid domain.'})
+            domain_parts = parts[1].split('.')
+            if any(not p for p in domain_parts) or len(domain_parts[-1]) < 2:
+                raise DjangoValidationError({'email': 'Enter a valid email address with a valid top-level domain.'})
 
     class Meta:
         verbose_name = 'User'
@@ -230,6 +261,20 @@ class NewsletterSubscriber(models.Model):
     email = models.EmailField(unique=True, db_index=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        super().clean()
+        if self.email:
+            self.email = self.email.strip().lower()
+            from django.core.validators import validate_email as django_validate_email
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            django_validate_email(self.email)
+            parts = self.email.split('@')
+            if len(parts) != 2 or '.' not in parts[1] or parts[1].startswith('.') or parts[1].endswith('.'):
+                raise DjangoValidationError({'email': 'Enter a valid email address with a valid domain.'})
+            domain_parts = parts[1].split('.')
+            if any(not p for p in domain_parts) or len(domain_parts[-1]) < 2:
+                raise DjangoValidationError({'email': 'Enter a valid email address with a valid top-level domain.'})
 
     class Meta:
         verbose_name = 'Newsletter Subscriber'

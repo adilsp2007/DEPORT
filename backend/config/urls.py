@@ -4,15 +4,16 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from .views import health_check
-from categories.views import CategoryAdminViewSet
+from categories.views import CategoryAdminViewSet, CategoryOfferAdminViewSet
 from products.views import ProductAdminViewSet, ProductImageAdminViewSet, BannerAdminViewSet
 from orders.views import (
     AdminOrderListView, AdminOrderDetailView, AdminOrderUpdateStatusView,
-    CouponAdminViewSet
+    AdminDashboardAnalyticsView, CouponAdminViewSet
 )
 
 admin_router = DefaultRouter()
 admin_router.register(r'categories', CategoryAdminViewSet, basename='admin-categories')
+admin_router.register(r'category-offers', CategoryOfferAdminViewSet, basename='admin-category-offers')
 admin_router.register(r'products', ProductAdminViewSet, basename='admin-products')
 admin_router.register(r'product-images', ProductImageAdminViewSet, basename='admin-product-images')
 admin_router.register(r'banners', BannerAdminViewSet, basename='admin-banners')
@@ -22,18 +23,30 @@ from users.views import (
     AdminLoginView, AdminDashboardStatsView, AdminUserListView,
     AdminUserDetailView, AdminUserToggleBlockView
 )
+from wallet.views import (
+    AdminWalletStatsView, AdminWalletListView, AdminWalletDetailView,
+    AdminWalletTransactionsView, AdminWalletCreditView, AdminWalletDebitView
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/health/', health_check, name='api-health'),
     path('api/auth/', include('users.urls')),
     path('api/users/', include('users.urls')),
+    path('api/wallet/', include('wallet.urls')),
     path('api/admin/login/', AdminLoginView.as_view(), name='admin_login_direct'),
     path('api/admin/stats/', AdminDashboardStatsView.as_view(), name='admin_stats_direct'),
     path('api/admin/dashboard/stats/', AdminDashboardStatsView.as_view(), name='admin_dashboard_stats_direct'),
+    path('api/admin/dashboard/analytics/', AdminDashboardAnalyticsView.as_view(), name='admin_dashboard_analytics_direct'),
     path('api/admin/users/', AdminUserListView.as_view(), name='admin_users_direct'),
     path('api/admin/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin_user_detail_direct'),
     path('api/admin/users/<int:pk>/toggle-block/', AdminUserToggleBlockView.as_view(), name='admin_user_toggle_block_direct'),
+    path('api/admin/wallets/stats/', AdminWalletStatsView.as_view(), name='admin_wallets_stats_direct'),
+    path('api/admin/wallets/', AdminWalletListView.as_view(), name='admin_wallets_list_direct'),
+    path('api/admin/wallets/<int:user_id>/', AdminWalletDetailView.as_view(), name='admin_wallets_detail_direct'),
+    path('api/admin/wallets/<int:user_id>/transactions/', AdminWalletTransactionsView.as_view(), name='admin_wallets_transactions_direct'),
+    path('api/admin/wallets/<int:user_id>/credit/', AdminWalletCreditView.as_view(), name='admin_wallets_credit_direct'),
+    path('api/admin/wallets/<int:user_id>/debit/', AdminWalletDebitView.as_view(), name='admin_wallets_debit_direct'),
     path('api/admin/orders/', AdminOrderListView.as_view(), name='admin_orders_direct'),
     path('api/admin/orders/<int:pk>/', AdminOrderDetailView.as_view(), name='admin_order_detail_direct'),
     path('api/admin/orders/<int:pk>/status/', AdminOrderUpdateStatusView.as_view(), name='admin_order_status_direct'),

@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useShop } from '../context/ShopContext';
 import authService from '../services/authService';
+import { parseApiError } from '../utils/errorHandler';
 
 export const SignupPage = () => {
   const location = useLocation();
@@ -187,12 +188,13 @@ export const SignupPage = () => {
       errorMessages.push('Last name must be at least 2 characters.');
     }
 
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
     if (!trimmedEmail) {
       newErrors.email = 'Email address is required.';
       errorMessages.push('Email address is required.');
-    } else if (!/\S+@\S+\.\S+/.test(trimmedEmail)) {
-      newErrors.email = 'Please enter a valid email address.';
-      errorMessages.push('Please enter a valid email address.');
+    } else if (!emailRegex.test(trimmedEmail)) {
+      newErrors.email = 'Please enter a valid email address (e.g. name@example.com).';
+      errorMessages.push('Please enter a valid email address (e.g. name@example.com).');
     }
 
     if (!formData.password) {
@@ -250,14 +252,15 @@ export const SignupPage = () => {
       const successMsg = regData?.message || 'Verification code sent to your email. Please check your inbox.';
       setOtpSuccess(successMsg);
       showToast('Registration submitted! Please verify with your 6-digit code.', 'info');
-      setCooldown(60);
+      setCooldown(30);
 
       // Switch to inline OTP step right on this page!
       setCurrentStep('verify');
     } catch (err) {
-      const normalized = {};
+      const parsed = parseApiError(err, 'Unable to register account. Please check the entered information.');
+      let primaryMessage = parsed.message;
+      const normalized = { ...parsed.fieldErrors };
       const serverErrorList = [];
-      let primaryMessage = 'Unable to register account. Please check your network connection.';
 
       if (err.response && err.response.data) {
         const data = err.response.data;
@@ -279,39 +282,21 @@ export const SignupPage = () => {
           setCurrentStep('verify');
           return;
         }
-
-        if (typeof data === 'string') {
-          primaryMessage = data;
-          normalized.general = data;
-          serverErrorList.push(data);
-        } else if (data.detail && typeof data.detail === 'string') {
-          primaryMessage = data.detail;
-          normalized.general = data.detail;
-          serverErrorList.push(data.detail);
-        } else {
-          Object.entries(data).forEach(([key, val]) => {
-            if (key === 'detail') return;
-            const msg = Array.isArray(val) ? val.join(' ') : String(val);
-            normalized[key] = msg;
-            serverErrorList.push(msg);
-          });
-
-          primaryMessage = serverErrorList[0] || data.detail || 'Registration failed. Please check the errors below.';
-          normalized.general = primaryMessage;
-        }
-      } else if (err.message) {
-        primaryMessage = err.message.includes('Network')
-          ? 'Network error. Please check your internet connection and backend server.'
-          : err.message;
-        normalized.general = primaryMessage;
-        serverErrorList.push(primaryMessage);
-      } else {
-        normalized.general = primaryMessage;
-        serverErrorList.push(primaryMessage);
       }
 
+      Object.entries(parsed.fieldErrors).forEach(([key, val]) => {
+        if (!serverErrorList.includes(val)) {
+          serverErrorList.push(val);
+        }
+      });
+
+      if (serverErrorList.length === 0) {
+        serverErrorList.push(primaryMessage);
+      }
+      normalized.general = primaryMessage;
+
       setErrors(normalized);
-      setErrorList(serverErrorList.length > 0 ? serverErrorList : [primaryMessage]);
+      setErrorList(serverErrorList);
       showToast(primaryMessage, 'error');
 
       if (errorBannerRef.current) {
@@ -429,27 +414,22 @@ export const SignupPage = () => {
         navigate('/login', { state: { registeredEmail: targetEmail, message: 'Email verified successfully! Please sign in.' } });
       }, 1500);
     } catch (err) {
-      if (err.response && err.response.data) {
-        const data = err.response.data;
-        if (data.already_verified) {
-          setCurrentStep('success');
-          showToast('Account is already verified! Welcome to DEPORT.');
-          setTimeout(() => {
-            navigate('/login', { state: { registeredEmail: targetEmail, message: 'Account is already verified. Please sign in.' } });
-          }, 1500);
-          return;
-        }
-        if (data.reason === 'EXPIRED') {
-          setOtp(['', '', '', '', '', '']);
-          setOtpError(data.detail || 'Your verification code has expired. Please click Resend Code to request a new code.');
-          if (otpInputRefs[0]?.current) otpInputRefs[0].current.focus();
-          return;
-        }
-        const detail = data.detail || data.non_field_errors?.[0];
-        setOtpError(detail || 'Invalid verification code. Please check and try again.');
-      } else {
-        setOtpError('Unable to connect to the authentication server. Please check your network connection.');
+      const parsed = parseApiError(err, 'The OTP you entered is incorrect. Please try again.');
+      if (err.response?.data?.already_verified) {
+        setCurrentStep('success');
+        showToast('Account is already verified! Welcome to DEPORT.');
+        setTimeout(() => {
+          navigate('/login', { state: { registeredEmail: targetEmail, message: 'Account is already verified. Please sign in.' } });
+        }, 1500);
+        return;
       }
+      if (err.response?.data?.reason === 'EXPIRED') {
+        setOtp(['', '', '', '', '', '']);
+        setOtpError('Your OTP has expired. Please request a new OTP.');
+        if (otpInputRefs[0]?.current) otpInputRefs[0].current.focus();
+        return;
+      }
+      setOtpError(parsed.message);
     } finally {
       setOtpLoading(false);
     }
@@ -474,16 +454,16 @@ export const SignupPage = () => {
       const msg = res?.message || 'A fresh verification code has been sent to your email.';
       setOtpSuccess(msg);
       showToast(msg, 'info');
-      setCooldown(res?.cooldown || 60);
+      setCooldown(res?.cooldown || 30);
       if (otpInputRefs[0]?.current) otpInputRefs[0].current.focus();
     } catch (err) {
-      const detail = err.response?.data?.detail;
+      const parsed = parseApiError(err, 'Failed to resend code. Please try again.');
       if (err.response?.status === 429 && err.response?.data?.remaining_seconds) {
         setCooldown(err.response.data.remaining_seconds);
       } else if (err.response?.status === 503) {
         setCooldown(0);
       }
-      setOtpError(detail || 'Failed to resend code. Please try again.');
+      setOtpError(parsed.message);
     } finally {
       setOtpResending(false);
     }
@@ -762,7 +742,7 @@ export const SignupPage = () => {
                         <button
                           type="button"
                           onClick={() => handleSwitchToVerify(formData.email.trim())}
-                          className="bg-[#10B981] hover:bg-[#059669] text-black font-bold text-[11px] uppercase tracking-wider py-1.5 px-3 transition-colors shadow-sm text-center"
+                          className="bg-[#10B981] hover:bg-[#059669] text-black hover:text-white font-bold text-[11px] uppercase tracking-wider py-1.5 px-3 transition-colors shadow-sm text-center"
                         >
                           Verify Code
                         </button>

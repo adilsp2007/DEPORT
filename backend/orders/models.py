@@ -1,5 +1,6 @@
 import uuid
 import datetime
+from decimal import Decimal
 from django.db import models
 from django.conf import settings
 from products.models import Product
@@ -137,6 +138,7 @@ class Order(models.Model):
     tax = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     shipping_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     discount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    wallet_amount_applied = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     total = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=10, default='INR')
 
@@ -215,6 +217,9 @@ class Payment(models.Model):
     METHOD_CHOICES = (
         ('Cash on Delivery', 'Cash on Delivery (COD)'),
         ('Razorpay', 'Razorpay'),
+        ('Wallet', 'Wallet'),
+        ('Wallet + Razorpay', 'Wallet + Razorpay'),
+        ('Wallet + Cash on Delivery', 'Wallet + Cash on Delivery'),
         ('Stripe', 'Stripe'),
         ('Credit Card', 'Credit / Debit Card'),
         ('Sandbox', 'Sandbox Test Gateway'),

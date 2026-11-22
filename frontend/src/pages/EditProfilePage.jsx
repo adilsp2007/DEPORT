@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useShop } from '../context/ShopContext';
 import userService from '../services/userService';
 import authService from '../services/authService';
+import { validateIndianPhoneNumber } from '../utils/phoneValidation';
+import { parseApiError } from '../utils/errorHandler';
 import AccountSidebar from '../components/AccountSidebar';
 import Input from '../components/Input';
 import Button from '../components/Button';
@@ -73,11 +75,27 @@ export const EditProfilePage = () => {
   const initials = `${formData.first_name?.[0] || ''}${formData.last_name?.[0] || ''}`.toUpperCase() || 'U';
   const isEmailChanged = user.email && formData.email.trim().toLowerCase() !== user.email.toLowerCase();
 
+  const getFieldError = (fieldName) => {
+    const err = errors[fieldName];
+    if (!err) return null;
+    if (Array.isArray(err)) return err.join(' ');
+    if (typeof err === 'string') return err;
+    return String(err);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setIsDirty(true);
-    if (errors[name]) {
+
+    if (name === 'phone') {
+      const phoneRes = validateIndianPhoneNumber(value, true);
+      if (!phoneRes.isValid) {
+        setErrors((prev) => ({ ...prev, phone: phoneRes.error }));
+      } else {
+        setErrors((prev) => ({ ...prev, phone: null }));
+      }
+    } else if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: null }));
     }
   };
@@ -131,12 +149,12 @@ export const EditProfilePage = () => {
       }
       setIsEmailModalOpen(true);
     } catch (err) {
-      const resp = err.response?.data;
-      if (resp?.new_email) {
-        setErrors((prev) => ({ ...prev, email: Array.isArray(resp.new_email) ? resp.new_email[0] : resp.new_email }));
-      } else {
-        showToast(resp?.detail || 'Failed to send email verification code.', 'error');
+      const parsed = parseApiError(err, 'Failed to send email verification code.');
+      const emailErr = parsed.fieldErrors?.newEmail || parsed.fieldErrors?.new_email || parsed.fieldErrors?.email;
+      if (emailErr) {
+        setErrors((prev) => ({ ...prev, email: emailErr }));
       }
+      showToast(parsed.message, 'error');
     } finally {
       setEmailOtpLoading(false);
     }
@@ -160,7 +178,8 @@ export const EditProfilePage = () => {
       setEmailOtpCode('');
       setDevOtpCode('');
     } catch (err) {
-      setEmailOtpError(err.response?.data?.detail || 'Invalid verification code. Please try again.');
+      const parsed = parseApiError(err, 'The OTP you entered is incorrect. Please try again.');
+      setEmailOtpError(parsed.message);
     } finally {
       setEmailOtpLoading(false);
     }
@@ -169,6 +188,32 @@ export const EditProfilePage = () => {
   // Save General Profile (Names, Phone, Photo)
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Client-side validation
+    const newErrors = {};
+    const trimmedFirstName = formData.first_name.trim();
+    const trimmedLastName = formData.last_name.trim();
+    const trimmedPhone = formData.phone.trim();
+
+    if (!trimmedFirstName) {
+      newErrors.first_name = 'First name is required.';
+    } else if (trimmedFirstName.length < 2) {
+      newErrors.first_name = 'First name must be at least 2 characters.';
+    }
+
+    const phoneRes = validateIndianPhoneNumber(trimmedPhone, true);
+    if (!phoneRes.isValid) {
+      newErrors.phone = phoneRes.error;
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      const firstErrMsg = Object.values(newErrors)[0];
+      showToast(typeof firstErrMsg === 'string' ? firstErrMsg : 'Please correct the errors in the form.', 'error');
+      return;
+    }
+
+    const cleanedPhone = phoneRes.cleaned;
 
     // If user changed email but didn't verify it via OTP, prompt them
     if (isEmailChanged) {
@@ -183,9 +228,9 @@ export const EditProfilePage = () => {
     try {
       if (selectedFile || isRemovingImage) {
         const payload = new FormData();
-        payload.append('first_name', formData.first_name);
-        payload.append('last_name', formData.last_name);
-        payload.append('phone', formData.phone);
+        payload.append('first_name', trimmedFirstName);
+        payload.append('last_name', trimmedLastName);
+        payload.append('phone', cleanedPhone);
 
         if (selectedFile) {
           payload.append('profile_image', selectedFile);
@@ -196,9 +241,9 @@ export const EditProfilePage = () => {
         await userService.updateMyProfile(payload);
       } else {
         await userService.updateMyProfile({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          phone: formData.phone
+          first_name: trimmedFirstName,
+          last_name: trimmedLastName,
+          phone: cleanedPhone
         });
       }
 
@@ -207,11 +252,9 @@ export const EditProfilePage = () => {
       setIsDirty(false);
       navigate('/profile');
     } catch (err) {
-      if (err.response?.data) {
-        setErrors(err.response.data);
-      } else {
-        setErrors({ general: 'Failed to update profile. Please try again.' });
-      }
+      const parsed = parseApiError(err, 'Failed to update profile. Please try again.');
+      setErrors(parsed.fieldErrors);
+      showToast(parsed.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -321,7 +364,7 @@ export const EditProfilePage = () => {
                   </p>
                   {errors.profile_image && (
                     <p className="text-xs text-rose-400 font-medium">
-                      {errors.profile_image[0]}
+                      {getFieldError('profile_image')}
                     </p>
                   )}
                 </div>
@@ -341,7 +384,7 @@ export const EditProfilePage = () => {
                   value={formData.first_name}
                   onChange={handleChange}
                   placeholder="e.g. Eleanor"
-                  error={errors.first_name?.[0]}
+                  error={getFieldError('first_name')}
                   icon={User}
                   required
                 />
@@ -352,21 +395,33 @@ export const EditProfilePage = () => {
                   value={formData.last_name}
                   onChange={handleChange}
                   placeholder="e.g. Vance"
-                  error={errors.last_name?.[0]}
+                  error={getFieldError('last_name')}
                   icon={User}
                   required
                 />
               </div>
 
-              <Input
-                label="Phone Number"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="e.g. +91 98765 43210"
-                error={errors.phone?.[0]}
-                icon={Phone}
-              />
+              <div>
+                <Input
+                  label="Phone Number (Indian Mobile)"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="e.g. 9876543210 or +91 9876543210"
+                  error={getFieldError('phone')}
+                  icon={Phone}
+                  required
+                />
+                {formData.phone && !getFieldError('phone') && (
+                  <p className="text-xs text-[#10B981] mt-1.5 flex items-center gap-1 font-medium">
+                    <CheckCircle2 size={13} />
+                    Valid 10-digit Indian mobile number
+                  </p>
+                )}
+                <p className="text-[11px] text-gray-400 mt-1">
+                  10-digit Indian mobile number starting with 6, 7, 8, or 9 (optional +91).
+                </p>
+              </div>
             </div>
 
             {/* Email Edit with OTP Verification */}
@@ -440,6 +495,7 @@ export const EditProfilePage = () => {
                 variant="primary"
                 size="md"
                 loading={saving}
+                disabled={Boolean(getFieldError('phone')) || saving}
                 icon={Save}
               >
                 Save Profile Changes

@@ -9,6 +9,7 @@ import { useWishlist } from '../hooks/useWishlist';
 export const ProductCard = ({ product }) => {
   const { addToCart, showToast } = useShop();
   const { isWishlisted, toggleWishlist, removeFromWishlist } = useWishlist();
+  const [imageError, setImageError] = React.useState(false);
 
   if (!product) return null;
 
@@ -23,13 +24,13 @@ export const ProductCard = ({ product }) => {
         : product.images[0]?.image
       : null);
 
-  // Calculate discount percentage
+  // Calculate discount and pricing
   const priceNum = parseFloat(product.price || 0);
-  const comparePriceNum = parseFloat(product.compare_at_price || 0);
-  const hasDiscount = comparePriceNum > priceNum;
-  const discountPercent = hasDiscount
+  const comparePriceNum = parseFloat(product.compare_at_price || product.original_price || 0);
+  const hasDiscount = product.has_discount ?? (comparePriceNum > priceNum);
+  const discountPercent = product.discount_percentage || (hasDiscount && comparePriceNum > 0
     ? Math.round(((comparePriceNum - priceNum) / comparePriceNum) * 100)
-    : 0;
+    : 0);
 
   const productSlug = product.slug || product.id;
   const categoryName = product.category?.name || product.categoryName || 'DEPORT';
@@ -59,20 +60,18 @@ export const ProductCard = ({ product }) => {
       {/* Image container with hover zoom */}
       <div className="relative aspect-4/5 overflow-hidden bg-[#0B0F0D]">
         <Link to={`/product/${productSlug}`} className="block h-full w-full">
-          {imageUrl ? (
+          {imageUrl && !imageError ? (
             <img
               src={imageUrl}
               alt={product.name}
-              onError={(e) => {
-                e.currentTarget.src = 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=800&q=80';
-              }}
+              onError={() => setImageError(true)}
               className="h-full w-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-108 opacity-90"
               loading="lazy"
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-[#0B0F0D] text-[#9CA3AF] text-center p-4">
               <span className="font-serif text-lg tracking-widest text-[#10B981] font-bold">DEPORT</span>
-              <span className="text-[10px] uppercase tracking-wider text-[#9CA3AF]/70 mt-1">No Image Available</span>
+              <span className="text-[10px] uppercase tracking-wider text-[#9CA3AF]/70 mt-1 line-clamp-1">{product.name}</span>
             </div>
           )}
         </Link>
@@ -94,6 +93,12 @@ export const ProductCard = ({ product }) => {
           {isAvailable && hasDiscount && (
             <span className="bg-[#10B981] text-black text-[9px] uppercase font-bold tracking-widest px-2.5 py-1 shadow-sm font-sans">
               {discountPercent}% OFF
+            </span>
+          )}
+
+          {isAvailable && product.category_offer && (
+            <span className="bg-[#047857] text-white text-[9px] uppercase font-bold tracking-widest px-2.5 py-1 shadow-sm font-sans">
+              CATEGORY OFFER
             </span>
           )}
 
@@ -158,6 +163,8 @@ export const ProductCard = ({ product }) => {
             oldPrice={product.compare_at_price || product.original_price || product.oldPrice}
             discountPercentage={product.discount_percentage || discountPercent}
             size="sm"
+            priceClassName="text-white font-bold"
+            oldPriceClassName="text-gray-400"
             className="flex-1 min-w-0"
           />
 

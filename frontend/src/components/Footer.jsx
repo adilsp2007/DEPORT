@@ -14,7 +14,7 @@ export const Footer = () => {
               <Truck size={22} />
             </div>
             <h4 className="font-serif text-lg font-medium text-white mb-2">Global Express Shipping</h4>
-            <p className="text-xs text-[#9CA3AF] leading-relaxed max-w-xs">
+            <p className="text-xs text-gray-300 leading-relaxed max-w-xs">
               Complimentary trackable luxury delivery directly to your doorstep worldwide.
             </p>
           </div>
@@ -24,7 +24,7 @@ export const Footer = () => {
               <ShieldCheck size={22} />
             </div>
             <h4 className="font-serif text-lg font-medium text-white mb-2">Lifetime Craftsmanship</h4>
-            <p className="text-xs text-[#9CA3AF] leading-relaxed max-w-xs">
+            <p className="text-xs text-gray-300 leading-relaxed max-w-xs">
               Every bag is crafted with full-grain Italian leather and backed by our guarantee.
             </p>
           </div>
@@ -34,7 +34,7 @@ export const Footer = () => {
               <RefreshCw size={22} />
             </div>
             <h4 className="font-serif text-lg font-medium text-white mb-2">Seamless 30-Day Returns</h4>
-            <p className="text-xs text-[#9CA3AF] leading-relaxed max-w-xs">
+            <p className="text-xs text-gray-300 leading-relaxed max-w-xs">
               Try your piece at home with our complimentary return and exchange service.
             </p>
           </div>
@@ -52,7 +52,7 @@ export const Footer = () => {
                 Carry Your Style
               </span>
             </Link>
-            <p className="text-xs text-[#9CA3AF] leading-relaxed mb-6 max-w-sm">
+            <p className="text-xs text-gray-300 leading-relaxed mb-6 max-w-sm">
               DEPORT creates luxury leather handbags, totes, travel duffels, and accessories designed to accompany life’s most elegant moments.
             </p>
             {/* Custom SVG Social Icons */}
@@ -80,7 +80,7 @@ export const Footer = () => {
             <h4 className="text-xs uppercase font-bold tracking-widest text-[#10B981] mb-6">
               Shop Collections
             </h4>
-            <ul className="space-y-3 text-xs text-[#9CA3AF]">
+            <ul className="space-y-3 text-xs text-gray-300">
               <li><Link to="/shop?category=handbags" className="hover:text-[#10B981] transition-colors">Handbags</Link></li>
               <li><Link to="/shop?category=tote-bags" className="hover:text-[#10B981] transition-colors">Tote Bags</Link></li>
               <li><Link to="/shop?category=crossbody" className="hover:text-[#10B981] transition-colors">Crossbody Bags</Link></li>
@@ -95,7 +95,7 @@ export const Footer = () => {
             <h4 className="text-xs uppercase font-bold tracking-widest text-[#10B981] mb-6">
               Customer Care
             </h4>
-            <ul className="space-y-3 text-xs text-[#9CA3AF]">
+            <ul className="space-y-3 text-xs text-gray-300">
               <li><Link to="/profile" className="hover:text-[#10B981] transition-colors">My Account</Link></li>
               <li><Link to="/addresses" className="hover:text-[#10B981] transition-colors">Shipping Addresses</Link></li>
               <li><a href="#" className="hover:text-[#10B981] transition-colors">Order Tracking</a></li>
@@ -110,14 +110,14 @@ export const Footer = () => {
             <h4 className="text-xs uppercase font-bold tracking-widest text-[#10B981] mb-6">
               Join The Club
             </h4>
-            <p className="text-xs text-[#9CA3AF] mb-4 leading-relaxed">
+            <p className="text-xs text-gray-300 mb-4 leading-relaxed">
               Subscribe to receive exclusive invitations to private collection previews and limited edition releases.
             </p>
             <form onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-2">
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="bg-[#131915] text-[#F3F4F6] text-xs px-4 py-3 border border-[#10B981]/30 focus:border-[#10B981] focus:outline-none placeholder-[#9CA3AF]/50"
+                className="bg-[#131915] text-[#F3F4F6] text-xs px-4 py-3 border border-[#10B981]/30 focus:border-[#10B981] focus:outline-none placeholder-gray-400 placeholder:opacity-85"
               />
               <Button variant="primary" size="sm">
                 Subscribe
@@ -128,12 +128,12 @@ export const Footer = () => {
       </div>
 
       {/* Bottom Legal Copyright */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#9CA3AF]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
         <p>© 2026 DEPORT Leather Atelier Inc. All rights reserved.</p>
         <div className="flex items-center gap-6">
-          <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-          <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-          <a href="#" className="hover:text-white transition-colors">Cookie Preferences</a>
+          <a href="#" className="hover:text-[#10B981] transition-colors">Privacy Policy</a>
+          <a href="#" className="hover:text-[#10B981] transition-colors">Terms of Service</a>
+          <a href="#" className="hover:text-[#10B981] transition-colors">Cookie Preferences</a>
         </div>
       </div>
     </footer>

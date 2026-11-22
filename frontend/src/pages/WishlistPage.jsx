@@ -184,6 +184,8 @@ export const WishlistPage = () => {
                             oldPrice={product.compare_at_price || product.original_price}
                             discountPercentage={product.discount_percentage}
                             size="sm"
+                            priceClassName="text-white font-bold"
+                            oldPriceClassName="text-gray-400"
                           />
                         </div>
                       </div>

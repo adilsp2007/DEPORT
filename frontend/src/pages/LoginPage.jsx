@@ -6,6 +6,7 @@ import { Mail, Lock, Eye, EyeOff, ShieldCheck, AlertCircle, CheckCircle2, ArrowR
 import { useAuth } from '../context/AuthContext';
 import { useShop } from '../context/ShopContext';
 import authService from '../services/authService';
+import { parseApiError } from '../utils/errorHandler';
 
 export const LoginPage = () => {
   const location = useLocation();
@@ -106,38 +107,17 @@ export const LoginPage = () => {
       showToast('Welcome back to DEPORT!');
       navigate('/');
     } catch (err) {
-      let mainError = 'Invalid email or password. Please try again.';
+      const parsed = parseApiError(err, 'Invalid email or password. Please try again.');
+      let mainError = parsed.message;
+      const data = err.response?.data;
 
-      if (err.response && err.response.data) {
-        const data = err.response.data;
-
-        if (data.is_unverified) {
-          setUnverifiedEmail(data.email || email.trim());
-          setUnverifiedOtpCode(data.otp_code || '');
-          mainError = data.detail || 'Your email address is not yet verified. Please verify your account.';
-        } else if (typeof data === 'string') {
-          mainError = data;
-        } else if (data.detail && typeof data.detail === 'string') {
-          mainError = data.detail;
-        } else if (data.non_field_errors) {
-          mainError = Array.isArray(data.non_field_errors) ? data.non_field_errors.join(' ') : data.non_field_errors;
-        } else if (typeof data === 'object') {
-          const fErrs = {};
-          const msgParts = [];
-          Object.entries(data).forEach(([key, val]) => {
-            const msg = Array.isArray(val) ? val.join(' ') : String(val);
-            fErrs[key] = msg;
-            msgParts.push(msg);
-          });
-          setFieldErrors(fErrs);
-          mainError = msgParts[0] || 'Invalid credentials provided.';
-        }
-      } else if (err.message) {
-        mainError = err.message.includes('Network')
-          ? 'Network error. Please check your connection and ensure the server is active.'
-          : err.message;
+      if (data?.is_unverified) {
+        setUnverifiedEmail(data.email || email.trim());
+        setUnverifiedOtpCode(data.otp_code || '');
+        mainError = data.detail || 'Your email address is not yet verified. Please verify your account.';
       }
 
+      setFieldErrors(parsed.fieldErrors || {});
       setErrorMessage(mainError);
       showToast(mainError, 'error');
 
@@ -341,7 +321,7 @@ export const LoginPage = () => {
                       <Link
                         to="/verify-email"
                         state={{ email: unverifiedEmail, otpCode: unverifiedOtpCode }}
-                        className="inline-flex items-center gap-1 bg-[#10B981] hover:bg-[#059669] text-black font-bold text-[11px] uppercase tracking-wider py-1.5 px-3 transition-colors shadow-sm text-center"
+                        className="inline-flex items-center gap-1 bg-[#10B981] hover:bg-[#059669] text-black hover:text-white font-bold text-[11px] uppercase tracking-wider py-1.5 px-3 transition-colors shadow-sm text-center"
                       >
                         Verify Email Now <ArrowRight size={12} />
                       </Link>

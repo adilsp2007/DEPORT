@@ -22,14 +22,11 @@ import {
   PackageX,
   CheckCircle2,
   AlertCircle,
-  Copy,
-  Check,
   ChevronRight,
-  Sparkles,
-  Star,
   Award,
   Clock,
-  Feather
+  Feather,
+  Sparkles
 } from 'lucide-react';
 
 export const ProductDetailsPage = () => {
@@ -41,7 +38,6 @@ export const ProductDetailsPage = () => {
 
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
-  const [couponCopied, setCouponCopied] = useState(false);
 
   // Redirect to listing if product is blocked, unlisted, or soft-deleted
   useEffect(() => {
@@ -50,11 +46,11 @@ export const ProductDetailsPage = () => {
       const isCategoryBlocked = product.category && (product.category.is_active === false || product.category.is_deleted === true);
 
       if (isBlocked || isCategoryBlocked) {
-        showToast('This product is currently unavailable or unlisted.', 'error');
+        showToast('This product is currently unavailable.', 'error');
         navigate('/shop', { replace: true });
       }
     } else if (!isLoading && isError) {
-      showToast('Product not found or has been unlisted.', 'error');
+      showToast('This product is currently unavailable.', 'error');
       navigate('/shop', { replace: true });
     }
   }, [product, isLoading, isError, navigate, showToast]);
@@ -73,18 +69,11 @@ export const ProductDetailsPage = () => {
   const isAvailable = stockQty > 0 && product?.is_active && !product?.is_deleted;
 
   const priceNum = parseFloat(product?.price || 0);
-  const comparePriceNum = parseFloat(product?.compare_at_price || 0);
-  const hasDiscount = comparePriceNum > priceNum;
-  const discountPercent = hasDiscount
+  const comparePriceNum = parseFloat(product?.compare_at_price || product?.original_price || 0);
+  const hasDiscount = product?.has_discount ?? (comparePriceNum > priceNum);
+  const discountPercent = product?.discount_percentage || (hasDiscount && comparePriceNum > 0
     ? Math.round(((comparePriceNum - priceNum) / comparePriceNum) * 100)
-    : 0;
-
-  const handleCopyCoupon = () => {
-    navigator.clipboard.writeText('DEPORT10');
-    setCouponCopied(true);
-    showToast('Promo code "DEPORT10" copied to clipboard!');
-    setTimeout(() => setCouponCopied(false), 3000);
-  };
+    : 0);
 
   const handleAddToCart = async () => {
     const isBlocked = product?.is_active === false || product?.is_deleted === true;
@@ -189,9 +178,9 @@ export const ProductDetailsPage = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 text-[#F3F4F6]">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 text-[#111827]">
       {/* Breadcrumbs Navigation */}
-      <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2 text-xs text-gray-400">
+      <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2 text-xs text-gray-600">
         <Link to="/" className="hover:text-[#10B981] transition-colors">Home</Link>
         <ChevronRight size={14} />
         <Link to="/shop" className="hover:text-[#10B981] transition-colors">Shop</Link>
@@ -207,7 +196,7 @@ export const ProductDetailsPage = () => {
           </>
         )}
         <ChevronRight size={14} />
-        <span className="text-[#F3F4F6] font-semibold truncate max-w-xs">{product.name}</span>
+        <span className="text-black font-semibold truncate max-w-xs">{product.name}</span>
       </nav>
 
       {/* Main Product Layout */}
@@ -225,9 +214,16 @@ export const ProductDetailsPage = () => {
         <div className="lg:col-span-5 flex flex-col items-start">
           {/* Category & Discount Badge */}
           <div className="flex items-center justify-between w-full mb-2">
-            <span className="text-xs uppercase font-bold tracking-[0.2em] text-[#10B981]">
-              {product.category?.name || 'DEPORT Atelier'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase font-bold tracking-[0.2em] text-[#10B981]">
+                {product.category?.name || 'DEPORT Atelier'}
+              </span>
+              {product.category_offer && (
+                <span className="bg-emerald-950/80 border border-emerald-600 text-emerald-300 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5">
+                  Category Offer
+                </span>
+              )}
+            </div>
 
             {hasDiscount && (
               <span className="bg-[#10B981] text-black text-[10px] uppercase font-bold tracking-widest px-2.5 py-1">
@@ -236,48 +232,63 @@ export const ProductDetailsPage = () => {
             )}
           </div>
 
-          <h1 className="font-serif text-3xl sm:text-4xl text-[#F3F4F6] font-normal mb-3 leading-tight">
+          <h1
+            className="font-serif text-3xl sm:text-4xl text-black font-normal mb-3 leading-tight"
+            style={{ color: '#000000' }}
+          >
             {product.name}
           </h1>
 
           {/* Ratings & SKU */}
-          <div className="flex items-center gap-4 mb-6 pb-6 border-b border-[#1E2922] w-full">
+          <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-300 w-full">
             <Rating rating={4.9} reviewCount={24} size={16} />
-            <span className="text-xs text-gray-400 font-mono">SKU: {product.sku}</span>
+            <span className="text-xs text-gray-600 font-mono">SKU: {product.sku}</span>
           </div>
 
           {/* Price Display */}
-          <div className="mb-6 flex flex-wrap items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <PriceDisplay
               price={product.price}
               oldPrice={product.compare_at_price || product.original_price}
               discountPercentage={product.discount_percentage || discountPercent}
               size="xl"
+              priceClassName="text-black font-bold font-serif"
+              oldPriceClassName="text-gray-500"
             />
             {hasDiscount && (
-              <span className="text-xs sm:text-sm text-[#10B981] font-semibold">
+              <span className="text-xs sm:text-sm text-emerald-800 font-semibold">
                 (Save {formatINR(comparePriceNum - priceNum)})
               </span>
             )}
           </div>
 
+          {/* Category Offer Banner if applied */}
+          {product.category_offer && (
+            <div className="mb-6 p-3 bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center gap-2 w-full">
+              <Sparkles size={15} className="text-emerald-700 shrink-0" />
+              <span>
+                <strong>Category Offer:</strong> {product.category_offer.offer_type === 'percentage' ? `${parseFloat(product.category_offer.offer_value)}% discount` : `${formatINR(product.category_offer.offer_value)} discount`} applied to {product.category_offer.category_name}.
+              </span>
+            </div>
+          )}
+
           {/* Stock Info Status */}
           <div className="mb-6 w-full">
             {isAvailable ? (
               stockQty <= 5 ? (
-                <div className="p-3 bg-amber-950/50 border border-amber-800/40 text-amber-300 text-xs flex items-center gap-2">
+                <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center gap-2">
                   <AlertCircle size={15} />
                   <span>Only <strong>{stockQty}</strong> left in stock — order soon to secure your piece.</span>
                 </div>
               ) : (
-                <div className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 px-3 py-1.5">
-                  <CheckCircle2 size={14} />
+                <div className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-900 bg-emerald-100 border border-emerald-300 px-3 py-1.5">
+                  <CheckCircle2 size={14} className="text-emerald-700" />
                   <span>In Stock • Ready for immediate courier dispatch</span>
                 </div>
               )
             ) : (
-              <div className="p-3.5 bg-rose-950/60 border border-rose-800/50 text-rose-300 text-xs flex items-center gap-2.5">
-                <AlertCircle size={16} className="text-rose-400" />
+              <div className="p-3.5 bg-rose-50 border border-rose-300 text-rose-900 text-xs flex items-center gap-2.5">
+                <AlertCircle size={16} className="text-rose-600" />
                 <span>
                   <strong>Currently Sold Out.</strong> This handcrafted item is momentarily out of stock.
                 </span>
@@ -285,33 +296,9 @@ export const ProductDetailsPage = () => {
             )}
           </div>
 
-          {/* Promotional Coupon Card */}
-          <div className="mb-6 p-4 bg-[#131915] border border-[#10B981]/30 w-full flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Sparkles size={20} className="text-[#10B981]" />
-              <div>
-                <p className="text-xs font-bold text-[#F3F4F6] uppercase tracking-wider">
-                  Special Atelier Offer: 10% Off
-                </p>
-                <p className="text-[11px] text-gray-400">
-                  Use coupon code <strong className="text-[#10B981]">DEPORT10</strong> at checkout
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleCopyCoupon}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#161D19] border border-[#1E2922] hover:border-[#10B981] text-xs font-semibold uppercase tracking-wider text-gray-300 hover:text-[#10B981] transition-all cursor-pointer"
-            >
-              {couponCopied ? <Check size={14} className="text-[#10B981]" /> : <Copy size={14} />}
-              <span>{couponCopied ? 'Copied' : 'Copy'}</span>
-            </button>
-          </div>
-
           {/* Short Description */}
           {product.short_description && (
-            <p className="text-gray-300 text-sm leading-relaxed mb-6 font-medium">
+            <p className="text-gray-800 text-sm leading-relaxed mb-6 font-medium">
               {product.short_description}
             </p>
           )}
@@ -353,7 +340,7 @@ export const ProductDetailsPage = () => {
           </div>
 
           {/* Value Perks */}
-          <div className="grid grid-cols-1 gap-3 p-4 bg-[#131915] border border-[#1E2922] w-full mb-8 text-xs text-gray-300">
+          <div className="grid grid-cols-1 gap-3 p-4 bg-[#131915] border border-[#1E2922] w-full mb-8 text-xs text-gray-200 shadow-xs">
             <div className="flex items-center gap-3">
               <Truck size={16} className="text-[#10B981]" />
               <span>Complimentary insured express shipping worldwide</span>
@@ -372,31 +359,34 @@ export const ProductDetailsPage = () => {
 
       {/* Product Highlights Section */}
       <div className="mb-20">
-        <h3 className="font-serif text-2xl font-normal text-[#F3F4F6] mb-8 pb-4 border-b border-[#1E2922]">
+        <h3
+          className="font-serif text-2xl font-normal text-black mb-8 pb-4 border-b border-gray-300"
+          style={{ color: '#000000' }}
+        >
           Product Highlights & Specifications
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-6 bg-[#131915] border border-[#1E2922] space-y-3">
+          <div className="p-6 bg-white border border-stone-200 space-y-3 shadow-xs">
             <Award size={24} className="text-[#10B981]" />
-            <h4 className="font-serif text-base font-bold text-[#F3F4F6]">Full-Grain Tuscan Leather</h4>
-            <p className="text-xs text-gray-400 leading-relaxed font-light">
+            <h4 className="font-serif text-base font-bold text-black">Full-Grain Tuscan Leather</h4>
+            <p className="text-xs text-gray-600 leading-relaxed font-light">
               Tanned naturally with plant-based extracts to develop a rich, lustrous patina over years of use.
             </p>
           </div>
 
-          <div className="p-6 bg-[#131915] border border-[#1E2922] space-y-3">
+          <div className="p-6 bg-white border border-stone-200 space-y-3 shadow-xs">
             <Clock size={24} className="text-[#10B981]" />
-            <h4 className="font-serif text-base font-bold text-[#F3F4F6]">Lifetime Durability</h4>
-            <p className="text-xs text-gray-400 leading-relaxed font-light">
+            <h4 className="font-serif text-base font-bold text-black">Lifetime Durability</h4>
+            <p className="text-xs text-gray-600 leading-relaxed font-light">
               Reinforced stress points, heavy-gauge nylon threads, and antiqued solid brass hardware.
             </p>
           </div>
 
-          <div className="p-6 bg-[#131915] border border-[#1E2922] space-y-3">
+          <div className="p-6 bg-white border border-stone-200 space-y-3 shadow-xs">
             <Feather size={24} className="text-[#10B981]" />
-            <h4 className="font-serif text-base font-bold text-[#F3F4F6]">Ergonomic Engineering</h4>
-            <p className="text-xs text-gray-400 leading-relaxed font-light">
+            <h4 className="font-serif text-base font-bold text-black">Ergonomic Engineering</h4>
+            <p className="text-xs text-gray-600 leading-relaxed font-light">
               Balanced weight distribution and padded straps tailored for effortless all-day commuting.
             </p>
           </div>
@@ -404,13 +394,13 @@ export const ProductDetailsPage = () => {
       </div>
 
       {/* Product Description & Reviews Tabs */}
-      <div className="mb-20 bg-[#131915] border border-[#1E2922] p-6 sm:p-10 shadow-xs">
-        <div className="flex items-center gap-8 border-b border-[#1E2922] pb-4 mb-8">
+      <div className="mb-20 bg-white border border-stone-200 p-6 sm:p-10 shadow-xs">
+        <div className="flex items-center gap-8 border-b border-gray-200 pb-4 mb-8">
           <button
             type="button"
             onClick={() => setActiveTab('description')}
             className={`font-serif text-lg font-medium transition-colors relative pb-4 -mb-4 cursor-pointer ${
-              activeTab === 'description' ? 'text-[#10B981] font-bold' : 'text-gray-400 hover:text-white'
+              activeTab === 'description' ? 'text-emerald-700 font-bold' : 'text-gray-600 hover:text-black'
             }`}
           >
             Product Overview
@@ -421,7 +411,7 @@ export const ProductDetailsPage = () => {
             type="button"
             onClick={() => setActiveTab('reviews')}
             className={`font-serif text-lg font-medium transition-colors relative pb-4 -mb-4 cursor-pointer ${
-              activeTab === 'reviews' ? 'text-[#10B981] font-bold' : 'text-gray-400 hover:text-white'
+              activeTab === 'reviews' ? 'text-emerald-700 font-bold' : 'text-gray-600 hover:text-black'
             }`}
           >
             Customer Reviews ({reviews.length})
@@ -432,7 +422,7 @@ export const ProductDetailsPage = () => {
             type="button"
             onClick={() => setActiveTab('details')}
             className={`font-serif text-lg font-medium transition-colors relative pb-4 -mb-4 cursor-pointer ${
-              activeTab === 'details' ? 'text-[#10B981] font-bold' : 'text-gray-400 hover:text-white'
+              activeTab === 'details' ? 'text-emerald-700 font-bold' : 'text-gray-600 hover:text-black'
             }`}
           >
             Atelier Specifications
@@ -441,31 +431,31 @@ export const ProductDetailsPage = () => {
         </div>
 
         {activeTab === 'description' && (
-          <div className="text-sm text-gray-300 leading-relaxed font-light space-y-4 max-w-3xl">
+          <div className="text-sm text-gray-800 leading-relaxed font-light space-y-4 max-w-3xl">
             <p>{product.description}</p>
           </div>
         )}
 
         {activeTab === 'reviews' && (
           <div className="space-y-6 max-w-3xl">
-            <div className="flex items-center gap-4 pb-4 border-b border-[#1E2922]">
-              <div className="text-3xl font-serif font-bold text-[#10B981]">4.9</div>
+            <div className="flex items-center gap-4 pb-4 border-b border-gray-200">
+              <div className="text-3xl font-serif font-bold text-emerald-700">4.9</div>
               <div>
                 <Rating rating={4.9} reviewCount={24} size={18} />
-                <p className="text-xs text-gray-400 mt-1">Based on 24 verified collector reviews</p>
+                <p className="text-xs text-gray-600 mt-1">Based on 24 verified collector reviews</p>
               </div>
             </div>
 
-            <div className="divide-y divide-[#1E2922] space-y-4">
+            <div className="divide-y divide-gray-200 space-y-4">
               {reviews.map((rev) => (
                 <div key={rev.id} className="pt-4 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-[#F3F4F6]">{rev.author}</span>
+                    <span className="font-bold text-sm text-black">{rev.author}</span>
                     <span className="text-xs text-gray-500">{rev.date}</span>
                   </div>
                   <Rating rating={rev.rating} size={14} />
-                  <p className="text-xs font-bold text-gray-200">{rev.title}</p>
-                  <p className="text-xs text-gray-400 leading-relaxed">{rev.comment}</p>
+                  <p className="text-xs font-bold text-gray-900">{rev.title}</p>
+                  <p className="text-xs text-gray-700 leading-relaxed">{rev.comment}</p>
                 </div>
               ))}
             </div>
@@ -474,21 +464,21 @@ export const ProductDetailsPage = () => {
 
         {activeTab === 'details' && (
           <div className="max-w-md space-y-3 text-sm">
-            <div className="flex justify-between py-2 border-b border-[#1E2922]">
-              <span className="font-semibold text-[#F3F4F6]">Brand</span>
-              <span className="text-gray-400">{product.brand || 'DEPORT'}</span>
+            <div className="flex justify-between py-2 border-b border-gray-200">
+              <span className="font-semibold text-black">Brand</span>
+              <span className="text-gray-600">{product.brand || 'DEPORT'}</span>
             </div>
-            <div className="flex justify-between py-2 border-b border-[#1E2922]">
-              <span className="font-semibold text-[#F3F4F6]">Category</span>
-              <span className="text-gray-400">{product.category?.name || 'Leather Bags'}</span>
+            <div className="flex justify-between py-2 border-b border-gray-200">
+              <span className="font-semibold text-black">Category</span>
+              <span className="text-gray-600">{product.category?.name || 'Leather Bags'}</span>
             </div>
-            <div className="flex justify-between py-2 border-b border-[#1E2922]">
-              <span className="font-semibold text-[#F3F4F6]">SKU</span>
-              <span className="text-gray-400 font-mono">{product.sku}</span>
+            <div className="flex justify-between py-2 border-b border-gray-200">
+              <span className="font-semibold text-black">SKU</span>
+              <span className="text-gray-600 font-mono">{product.sku}</span>
             </div>
-            <div className="flex justify-between py-2 border-b border-[#1E2922]">
-              <span className="font-semibold text-[#F3F4F6]">Stock Status</span>
-              <span className="text-gray-400">{stockQty} units remaining</span>
+            <div className="flex justify-between py-2 border-b border-gray-200">
+              <span className="font-semibold text-black">Stock Status</span>
+              <span className="text-gray-600">{stockQty} units remaining</span>
             </div>
           </div>
         )}
@@ -497,7 +487,10 @@ export const ProductDetailsPage = () => {
       {/* You May Also Like (Related Products Recommendation) */}
       {relatedProducts.length > 0 && (
         <div>
-          <h3 className="font-serif text-2xl font-normal text-[#F3F4F6] mb-8 pb-4 border-b border-[#1E2922]">
+          <h3
+            className="font-serif text-2xl font-normal text-black mb-8 pb-4 border-b border-gray-300"
+            style={{ color: '#000000' }}
+          >
             You May Also Admire
           </h3>
           <ProductGrid products={relatedProducts} columns={4} />

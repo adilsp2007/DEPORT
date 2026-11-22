@@ -12,9 +12,7 @@ class Product(models.Model):
     compare_at_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     category = models.ForeignKey(
         Category,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name='products',
         db_index=True
     )
@@ -82,6 +80,8 @@ class Product(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+        if not self.category_id:
+            raise ValidationError({'category': 'Please select a category.'})
         if self.price is not None and self.price < 0:
             raise ValidationError({'price': 'Price cannot be negative.'})
         if self.compare_at_price is not None and self.compare_at_price < 0:
@@ -139,6 +139,10 @@ class Banner(models.Model):
     secondary_button_link = models.CharField(max_length=255, blank=True)
     placement = models.CharField(max_length=50, choices=PLACEMENT_CHOICES, default='hero', db_index=True)
     is_active = models.BooleanField(default=True, db_index=True)
+    start_date = models.DateTimeField(null=True, blank=True, db_index=True)
+    end_date = models.DateTimeField(null=True, blank=True, db_index=True)
+    linked_category = models.ForeignKey('categories.Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='banners')
+    linked_product = models.ForeignKey('products.Product', on_delete=models.SET_NULL, null=True, blank=True, related_name='banners')
     display_order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -150,3 +154,43 @@ class Banner(models.Model):
 
     def __str__(self):
         return f"{self.get_placement_display()} - {self.title}"
+
+    @property
+    def banner_type(self):
+        return self.placement
+
+    @banner_type.setter
+    def banner_type(self, value):
+        self.placement = value
+
+    @property
+    def status(self):
+        """
+        Computed status: 'active', 'inactive', 'expired', or 'scheduled'.
+        """
+        if not self.is_active:
+            return 'inactive'
+        from django.utils import timezone
+        now = timezone.now()
+        if self.start_date and now < self.start_date:
+            return 'scheduled'
+        if self.end_date and now > self.end_date:
+            return 'expired'
+        return 'active'
+
+    @property
+    def is_currently_valid(self):
+        from django.utils import timezone
+        now = timezone.now()
+        if not self.is_active:
+            return False
+        if self.start_date and now < self.start_date:
+            return False
+        if self.end_date and now > self.end_date:
+            return False
+        return True
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValidationError({'end_date': 'End date must be later than start date.'})

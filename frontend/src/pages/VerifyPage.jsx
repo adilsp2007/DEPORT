@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useShop } from '../context/ShopContext';
+import { parseApiError } from '../utils/errorHandler';
 
 export const VerifyPage = () => {
   const location = useLocation();
@@ -194,27 +195,22 @@ export const VerifyPage = () => {
         navigate('/login', { state: { registeredEmail: targetEmail, message: 'Email verified successfully! Please sign in.' } });
       }, 1500);
     } catch (err) {
-      if (err.response && err.response.data) {
-        const data = err.response.data;
-        if (data.already_verified) {
-          setIsSuccessVerified(true);
-          showToast('Account is already verified! Welcome to DEPORT.');
-          setTimeout(() => {
-            navigate('/login', { state: { registeredEmail: targetEmail, message: 'Account is already verified. Please sign in.' } });
-          }, 1500);
-          return;
-        }
-        if (data.reason === 'EXPIRED') {
-          setOtp(['', '', '', '', '', '']);
-          setErrorMessage(data.detail || 'Your verification code has expired. Please click Resend Code to request a new code.');
-          if (inputRefs[0]?.current) inputRefs[0].current.focus();
-          return;
-        }
-        const detail = data.detail || data.non_field_errors?.[0];
-        setErrorMessage(detail || 'Invalid verification code. Please check the code and try again.');
-      } else {
-        setErrorMessage('Unable to connect to the authentication server. Please check your network connection.');
+      const parsed = parseApiError(err, 'The OTP you entered is incorrect. Please try again.');
+      if (err.response?.data?.already_verified) {
+        setIsSuccessVerified(true);
+        showToast('Account is already verified! Welcome to DEPORT.');
+        setTimeout(() => {
+          navigate('/login', { state: { registeredEmail: targetEmail, message: 'Account is already verified. Please sign in.' } });
+        }, 1500);
+        return;
       }
+      if (err.response?.data?.reason === 'EXPIRED') {
+        setOtp(['', '', '', '', '', '']);
+        setErrorMessage('Your OTP has expired. Please request a new OTP.');
+        if (inputRefs[0]?.current) inputRefs[0].current.focus();
+        return;
+      }
+      setErrorMessage(parsed.message);
     } finally {
       setLoading(false);
     }
@@ -240,20 +236,16 @@ export const VerifyPage = () => {
       const msg = res?.message || 'A new verification code has been sent to your email.';
       setSuccessMessage(msg);
       showToast(msg, 'info');
-      setCooldown(res?.cooldown || 60);
+      setCooldown(res?.cooldown || 30);
       if (inputRefs[0]?.current) inputRefs[0].current.focus();
     } catch (err) {
-      if (err.response && err.response.data) {
-        const detail = err.response.data.detail;
-        if (err.response.status === 429 && err.response.data.remaining_seconds) {
-          setCooldown(err.response.data.remaining_seconds);
-        } else if (err.response.status === 503) {
-          setCooldown(0);
-        }
-        setErrorMessage(detail || 'Failed to resend verification code. Please try again.');
-      } else {
-        setErrorMessage('Failed to resend verification code. Please check your connection.');
+      const parsed = parseApiError(err, 'Failed to resend verification code. Please try again.');
+      if (err.response?.status === 429 && err.response?.data?.remaining_seconds) {
+        setCooldown(err.response.data.remaining_seconds);
+      } else if (err.response?.status === 503) {
+        setCooldown(0);
       }
+      setErrorMessage(parsed.message);
     } finally {
       setResending(false);
     }

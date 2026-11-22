@@ -4,6 +4,7 @@ import Button from '../../components/Button';
 import AdminPagination from '../../components/admin/AdminPagination';
 import { validateCouponForm, normalizeCouponCode } from '../../utils/couponUtils';
 import { formatINR } from '../../utils/currencyUtils';
+import { parseApiError } from '../../utils/errorHandler';
 import {
   Ticket,
   Search,
@@ -129,15 +130,21 @@ export const AdminCouponsPage = () => {
     return <p className="text-rose-400 text-[11px] mt-1 font-medium">{msg}</p>;
   };
 
-  // Handle Form Change
+  // Handle Form Change with instant field error clearing
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : (name === 'code' ? value.toUpperCase() : value)
     }));
-    if (formErrors[name]) {
-      setFormErrors((prev) => ({ ...prev, [name]: null }));
+    if (formErrors[name] || formErrors.detail || formErrors.general) {
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        delete next.detail;
+        delete next.general;
+        return next;
+      });
     }
   };
 
@@ -191,10 +198,21 @@ export const AdminCouponsPage = () => {
       return;
     }
 
+    // Client-side duplicate check
+    const normalizedCode = normalizeCouponCode(formData.code);
+    const currentId = editingCoupon?.id || null;
+    const isDuplicate = coupons.some(
+      (c) => c.id !== currentId && c.code.trim().toUpperCase() === normalizedCode
+    );
+    if (isDuplicate) {
+      setFormErrors({ code: 'Coupon with this code already exists.' });
+      return;
+    }
+
     setSubmitting(true);
 
     const payload = {
-      code: normalizeCouponCode(formData.code),
+      code: normalizedCode,
       discount_type: formData.discount_type,
       discount_value: formData.discount_value,
       min_order_amount: formData.min_order_amount || '0.00',
@@ -221,10 +239,11 @@ export const AdminCouponsPage = () => {
       fetchCoupons();
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
-      if (err.response?.data) {
-        setFormErrors(err.response.data);
+      const parsed = parseApiError(err, 'Failed to save coupon.');
+      if (parsed.fieldErrors && Object.keys(parsed.fieldErrors).length > 0) {
+        setFormErrors(parsed.fieldErrors);
       } else {
-        setError('An unexpected error occurred. Please check values.');
+        setFormErrors({ detail: parsed.message });
       }
     } finally {
       setSubmitting(false);
@@ -414,13 +433,13 @@ export const AdminCouponsPage = () => {
             <tbody className="divide-y divide-[#1E2922] text-gray-300">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-500 animate-pulse">
+                  <td colSpan={7} className="py-12 text-center text-gray-400 animate-pulse">
                     Loading promotional coupons...
                   </td>
                 </tr>
               ) : coupons.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-500 font-light">
+                  <td colSpan={7} className="py-12 text-center text-gray-400 font-light">
                     No coupons found matching your search.
                   </td>
                 </tr>
@@ -453,7 +472,7 @@ export const AdminCouponsPage = () => {
                     </td>
                     <td className="py-3 px-4 font-mono">
                       <span>{coupon.used_count ?? coupon.times_used ?? 0}</span>
-                      <span className="text-gray-500"> / {coupon.usage_limit ?? '∞'}</span>
+                      <span className="text-gray-400"> / {coupon.usage_limit ?? '∞'}</span>
                     </td>
                     <td className="py-3 px-4 text-[11px] text-gray-400">
                       {(coupon.expiration_date || coupon.end_date) ? (
@@ -488,7 +507,7 @@ export const AdminCouponsPage = () => {
                           className={`p-1.5 transition-colors rounded ${
                             coupon.is_active
                               ? 'text-[#10B981] hover:text-rose-400 hover:bg-rose-500/10'
-                              : 'text-gray-500 hover:text-[#10B981] hover:bg-[#10B981]/10'
+                              : 'text-gray-400 hover:text-[#10B981] hover:bg-[#10B981]/10'
                           }`}
                           title={coupon.is_active ? 'Deactivate Coupon' : 'Activate Coupon'}
                         >

@@ -1,11 +1,13 @@
+import re
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from django.db.models import Q
+from django.utils import timezone
 from users.permissions import IsAdminUser
-from .models import Category
-from .serializers import CategorySerializer, CategoryDetailSerializer
+from .models import Category, CategoryOffer
+from .serializers import CategorySerializer, CategoryDetailSerializer, CategoryOfferSerializer
 
 
 from config.pagination import StandardResultsSetPagination
@@ -90,8 +92,9 @@ class CategoryAdminViewSet(viewsets.ModelViewSet):
         Handle creating category. If category with same name exists and is soft-deleted,
         reactivate and update it cleanly.
         """
-        name = request.data.get('name', '').strip()
-        existing_deleted = Category.objects.filter(name__iexact=name, is_deleted=True).first()
+        name = request.data.get('name', '')
+        cleaned_name = re.sub(r'\s+', ' ', name).strip() if isinstance(name, str) else ''
+        existing_deleted = Category.objects.filter(name__iexact=cleaned_name, is_deleted=True).first() if cleaned_name else None
         if existing_deleted:
             existing_deleted.is_deleted = False
             existing_deleted.is_active = True
@@ -147,4 +150,76 @@ class CategoryAdminViewSet(viewsets.ModelViewSet):
             'message': f'Category status updated to {"Active" if category.is_active else "Inactive"}.',
             'id': category.id,
             'is_active': category.is_active
+        }, status=status.HTTP_200_OK)
+
+
+class CategoryOfferAdminViewSet(viewsets.ModelViewSet):
+    """
+    Admin ViewSet for managing Category Offers.
+    Supports:
+    - Create, Read, Update, Delete
+    - Toggle Active Status
+    - Search by category name
+    - Filter by status (active, scheduled, expired, inactive)
+    - Sorting by newest, oldest, value_high, value_low, end_date
+    - Pagination
+    """
+    queryset = CategoryOffer.objects.all().select_related('category').order_by('-created_at')
+    serializer_class = CategoryOfferSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        queryset = CategoryOffer.objects.all().select_related('category')
+        params = self.request.query_params
+        now = timezone.now()
+
+        # Search by category name
+        search = params.get('search')
+        if search:
+            search = search.strip()
+            queryset = queryset.filter(category__name__icontains=search)
+
+        # Filter by status
+        status_param = params.get('status')
+        if status_param == 'active':
+            queryset = queryset.filter(is_active=True, start_date__lte=now, end_date__gte=now)
+        elif status_param == 'scheduled':
+            queryset = queryset.filter(is_active=True, start_date__gt=now)
+        elif status_param == 'expired':
+            queryset = queryset.filter(is_active=True, end_date__lt=now)
+        elif status_param == 'inactive':
+            queryset = queryset.filter(is_active=False)
+
+        # Filter by category
+        category_id = params.get('category')
+        if category_id and category_id.isdigit():
+            queryset = queryset.filter(category_id=int(category_id))
+
+        # Filter by offer_type
+        offer_type = params.get('offer_type')
+        if offer_type in ['percentage', 'fixed']:
+            queryset = queryset.filter(offer_type=offer_type)
+
+        # Sorting
+        sort_param = params.get('sort', 'newest')
+        sort_map = {
+            'newest': '-created_at',
+            'oldest': 'created_at',
+            'value_high': '-offer_value',
+            'value_low': 'offer_value',
+            'end_date': 'end_date',
+        }
+        order_by = sort_map.get(sort_param, '-created_at')
+        return queryset.order_by(order_by)
+
+    @action(detail=True, methods=['post'], url_path='toggle-status')
+    def toggle_status(self, request, pk=None):
+        offer = self.get_object()
+        offer.is_active = not offer.is_active
+        offer.save()
+        status_text = 'Active' if offer.is_active else 'Inactive'
+        return Response({
+            'message': f'Offer for "{offer.category.name}" updated to {status_text}.',
+            'offer': self.get_serializer(offer).data
         }, status=status.HTTP_200_OK)

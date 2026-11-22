@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import adminService from '../../services/adminService';
 import Button from '../../components/Button';
 import AdminPagination from '../../components/admin/AdminPagination';
+import { parseApiError } from '../../utils/errorHandler';
 import {
   Boxes,
   Search,
@@ -99,7 +100,8 @@ export const AdminInventoryPage = () => {
       });
       setEditingStock(stockMap);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load inventory data.');
+      const parsed = parseApiError(err, 'Failed to load inventory data.');
+      setError(parsed.message);
     } finally {
       setLoading(false);
     }
@@ -161,9 +163,10 @@ export const AdminInventoryPage = () => {
       });
       fetchKpis();
     } catch (err) {
+      const parsed = parseApiError(err, 'Failed to adjust stock quantity.');
       setToastMessage({
         type: 'error',
-        text: err.response?.data?.detail || 'Failed to adjust stock quantity.'
+        text: parsed.message
       });
     } finally {
       setSavingProductId(null);
@@ -196,9 +199,10 @@ export const AdminInventoryPage = () => {
       });
       fetchKpis();
     } catch (err) {
+      const parsed = parseApiError(err, 'Failed to update stock.');
       setToastMessage({
         type: 'error',
-        text: err.response?.data?.detail || 'Failed to update stock.'
+        text: parsed.message
       });
     } finally {
       setSavingProductId(null);
@@ -232,9 +236,10 @@ export const AdminInventoryPage = () => {
       setRestockModalProduct(null);
       fetchKpis();
     } catch (err) {
+      const parsed = parseApiError(err, 'Failed to complete restock.');
       setToastMessage({
         type: 'error',
-        text: err.response?.data?.detail || 'Failed to complete restock.'
+        text: parsed.message
       });
     } finally {
       setSubmittingRestock(false);
@@ -342,7 +347,7 @@ export const AdminInventoryPage = () => {
             <Layers size={16} className="text-gray-400" />
           </div>
           <p className="font-serif text-2xl font-bold text-[#F3F4F6]">{kpiCounts.total}</p>
-          <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-wider">All tracked items</p>
+          <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wider">All tracked items</p>
         </div>
 
         {/* In Stock */}
@@ -585,7 +590,7 @@ export const AdminInventoryPage = () => {
                           ₹{Number(item.price).toLocaleString()}
                         </div>
                         {item.sale_price && Number(item.sale_price) < Number(item.price) && (
-                          <span className="text-[10px] text-gray-500 line-through font-mono block">
+                          <span className="text-[10px] text-gray-400 line-through font-mono block">
                             ₹{Number(item.sale_price).toLocaleString()}
                           </span>
                         )}

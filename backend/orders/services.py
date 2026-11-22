@@ -157,6 +157,26 @@ def cancel_order_and_restore_stock(order_id_or_number, user=None, is_admin=False
             p.status = 'cancelled'
             p.save(update_fields=['status', 'updated_at'])
 
+        # Refund wallet amount if order had wallet payment applied
+        if locked_order.wallet_amount_applied > Decimal('0.00') and locked_order.user:
+            from wallet.models import Wallet, WalletTransaction
+            already_refunded = WalletTransaction.objects.filter(
+                wallet__user=locked_order.user,
+                transaction_type='cancellation_refund',
+                reference_id=locked_order.order_number
+            ).exists()
+
+            if not already_refunded:
+                user_wallet = Wallet.get_or_create_wallet(locked_order.user)
+                user_wallet.credit(
+                    amount=locked_order.wallet_amount_applied,
+                    transaction_type='cancellation_refund',
+                    description=f"Refund for cancelled Order {locked_order.order_number}",
+                    reference_id=locked_order.order_number,
+                    performed_by=user if is_admin else None
+                )
+                locked_order.payments.filter(payment_method='Wallet', status='completed').update(status='refunded')
+
         # Release coupon usage and decrement used_count
         if locked_order.coupon_id:
             coupon = Coupon.objects.select_for_update().filter(id=locked_order.coupon_id).first()

@@ -1,7 +1,7 @@
 import re
 from django import forms
 from django.contrib import admin
-from .models import Category
+from .models import Category, CategoryOffer
 
 
 class CategoryAdminForm(forms.ModelForm):
@@ -32,4 +32,12 @@ class CategoryAdmin(admin.ModelAdmin):
     list_filter = ('is_active', 'created_at')
     search_fields = ('name', 'description')
     prepopulated_fields = {'slug': ('name',)}
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(CategoryOffer)
+class CategoryOfferAdmin(admin.ModelAdmin):
+    list_display = ('category', 'offer_type', 'offer_value', 'status', 'start_date', 'end_date', 'is_active', 'created_at')
+    list_filter = ('offer_type', 'is_active', 'start_date', 'end_date')
+    search_fields = ('category__name',)
     readonly_fields = ('created_at', 'updated_at')

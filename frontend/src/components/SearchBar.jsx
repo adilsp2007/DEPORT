@@ -55,7 +55,7 @@ export const SearchBar = ({ isOpen, onClose }) => {
             onChange={(e) => setTerm(e.target.value)}
             placeholder="Search luxury bags, totes, wallets..."
             autoFocus
-            className="flex-1 bg-transparent text-lg text-[#F3F4F6] placeholder-gray-500 focus:outline-none font-serif"
+            className="flex-1 bg-transparent text-lg text-[#F3F4F6] placeholder-gray-400 placeholder:opacity-85 focus:outline-none font-serif"
           />
           {term && (
             <button
@@ -115,6 +115,8 @@ export const SearchBar = ({ isOpen, onClose }) => {
                         oldPrice={product.compare_at_price || product.original_price}
                         discountPercentage={product.discount_percentage}
                         size="xs"
+                        priceClassName="text-white font-bold"
+                        oldPriceClassName="text-gray-400"
                       />
                     </div>
                   );

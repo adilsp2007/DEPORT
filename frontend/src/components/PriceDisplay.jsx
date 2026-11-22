@@ -16,7 +16,9 @@ export const PriceDisplay = ({
   size = 'md',
   showBadge = true,
   className = '',
-  badgeClassName = ''
+  badgeClassName = '',
+  priceClassName = 'text-black font-extrabold',
+  oldPriceClassName = 'text-gray-500'
 }) => {
   const formattedPrice = formatINR(price);
   if (!formattedPrice) return null;
@@ -72,15 +74,22 @@ export const PriceDisplay = ({
 
   return (
     <div className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 ${className}`}>
-      {/* 1. Final Selling Price (Prominently bold and high-contrast) */}
-      <span className={`${priceSizes[size] || priceSizes.md} text-white tracking-tight`}>
+      {/* 1. Final Selling Price (Pure Black text by default for maximum visibility) */}
+      <span
+        className={`${priceSizes[size] || priceSizes.md} ${priceClassName || 'text-black font-extrabold'} tracking-tight`}
+        style={
+          priceClassName && (priceClassName.includes('text-white') || priceClassName.includes('text-emerald'))
+            ? undefined
+            : { color: '#000000' }
+        }
+      >
         {formattedPrice}
       </span>
 
-      {/* 2. Original Price (Smaller, grey, crossed out) */}
+      {/* 2. Original Price (Smaller, crossed out) */}
       {hasDiscount && (
         <span
-          className={`${oldPriceSizes[size] || oldPriceSizes.md} text-gray-400 line-through font-normal select-none`}
+          className={`${oldPriceSizes[size] || oldPriceSizes.md} ${oldPriceClassName || 'text-gray-500'} line-through font-normal select-none`}
           aria-label={`Original price: ${formatINR(numOldPrice)}`}
         >
           {formatINR(numOldPrice)}

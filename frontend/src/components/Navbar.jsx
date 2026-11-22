@@ -165,7 +165,7 @@ export const Navbar = () => {
                         <p className="text-xs font-serif font-bold text-white">
                           {user.first_name} {user.last_name}
                         </p>
-                        <p className="text-[11px] text-[#9CA3AF] truncate">{user.email}</p>
+                        <p className="text-[11px] text-gray-300 truncate">{user.email}</p>
                       </div>
 
                       <Link
@@ -294,7 +294,7 @@ export const Navbar = () => {
                 </nav>
               </div>
 
-              <div className="text-xs text-[#9CA3AF] pt-6 border-t border-white/10">
+              <div className="text-xs text-gray-400 pt-6 border-t border-white/10">
                 <p>© 2026 DEPORT Leather Atelier. All rights reserved.</p>
               </div>
             </div>

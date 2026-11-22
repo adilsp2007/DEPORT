@@ -6,6 +6,8 @@ import { useShop } from '../context/ShopContext';
 import Button from '../components/Button';
 import Skeleton from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
+import ErrorState from '../components/ErrorState';
+import { parseApiError } from '../utils/errorHandler';
 import { formatINR } from '../utils/currencyUtils';
 import {
   Package,
@@ -402,13 +404,27 @@ export const OrderDetailPage = () => {
     );
   }
 
-  if (error || !order) {
+  if (queryError && queryError.response?.status !== 404) {
+    const parsed = parseApiError(queryError, 'Unable to load order details. Please check your connection.');
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+        <ErrorState
+          title="Unable to Load Order"
+          message={parsed.message}
+          onRetry={() => fetchOrderDetail()}
+          retryLabel="Retry Loading"
+        />
+      </div>
+    );
+  }
+
+  if (queryError || !order) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
         <EmptyState
           icon={AlertCircle}
           title="Order Not Found"
-          description={error || "We couldn't retrieve the details for this order reference."}
+          description="The requested order could not be found or has been removed."
           actionLabel="Return to My Orders"
           actionIcon={ArrowLeft}
           onAction={() => navigate('/orders')}
@@ -475,7 +491,7 @@ export const OrderDetailPage = () => {
               icon={CreditCard}
               loading={retryingPayment}
               onClick={handleRetryPayment}
-              className="bg-emerald-600 hover:bg-emerald-500 text-black font-bold"
+              className="bg-[#10B981] hover:bg-[#059669] text-black hover:text-white font-bold transition-colors"
             >
               Pay Now ({formatINR(order.total)})
             </Button>
@@ -541,7 +557,7 @@ export const OrderDetailPage = () => {
             icon={CreditCard}
             loading={retryingPayment}
             onClick={handleRetryPayment}
-            className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-500 text-black font-bold"
+            className="flex-shrink-0 bg-[#10B981] hover:bg-[#059669] text-black hover:text-white font-bold transition-colors"
           >
             Complete Payment ({formatINR(order.total)})
           </Button>
@@ -788,7 +804,7 @@ export const OrderDetailPage = () => {
                     icon={CreditCard}
                     loading={retryingPayment}
                     onClick={handleRetryPayment}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-black font-bold"
+                    className="bg-[#10B981] hover:bg-[#059669] text-black hover:text-white font-bold transition-colors"
                   >
                     Pay Now ({formatINR(order.total)})
                   </Button>

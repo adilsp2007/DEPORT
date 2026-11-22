@@ -41,7 +41,7 @@ export const HeroSection = () => {
               )}
             </h1>
 
-            <p className="text-[#9CA3AF] text-base sm:text-lg max-w-lg mb-8 font-light leading-relaxed">
+            <p className="text-gray-300 text-base sm:text-lg max-w-lg mb-8 font-light leading-relaxed">
               {subtitle}
             </p>
 
@@ -64,15 +64,15 @@ export const HeroSection = () => {
             <div className="grid grid-cols-3 gap-6 pt-10 mt-10 border-t border-[#10B981]/20 w-full">
               <div>
                 <span className="font-serif text-2xl font-semibold text-white">100%</span>
-                <p className="text-xs text-[#9CA3AF] uppercase tracking-wider mt-1">Italian Leather</p>
+                <p className="text-xs text-gray-300 uppercase tracking-wider mt-1">Italian Leather</p>
               </div>
               <div>
                 <span className="font-serif text-2xl font-semibold text-white">Lifetime</span>
-                <p className="text-xs text-[#9CA3AF] uppercase tracking-wider mt-1">Guarantee</p>
+                <p className="text-xs text-gray-300 uppercase tracking-wider mt-1">Guarantee</p>
               </div>
               <div>
                 <span className="font-serif text-2xl font-semibold text-white">Free</span>
-                <p className="text-xs text-[#9CA3AF] uppercase tracking-wider mt-1">Global Shipping</p>
+                <p className="text-xs text-gray-300 uppercase tracking-wider mt-1">Global Shipping</p>
               </div>
             </div>
           </div>
